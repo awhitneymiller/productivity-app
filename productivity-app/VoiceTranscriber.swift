@@ -1,3 +1,11 @@
+//
+//  VoiceTranscriber.swift
+//  productivity-app
+//
+//  Created by Audrey W-M on 1/9/26.
+//
+
+
 import Foundation
 import AVFoundation
 import FluidAudio
@@ -29,7 +37,7 @@ final class VoiceTranscriber: ObservableObject {
     private func ensureAsrReady() async throws {
         if isAsrReady { return }
 
-        status = "Loading ASR model…"
+        status = "Loading"
 
         // Downloads + loads Parakeet models (v3 multilingual; v2 english-only higher recall)
         let models = try await AsrModels.downloadAndLoad(version: .v3)  // .v2 if you want English-only :contentReference[oaicite:3]{index=3}
@@ -39,7 +47,7 @@ final class VoiceTranscriber: ObservableObject {
 
         self.asrManager = manager
         self.isAsrReady = true
-        status = "ASR ready"
+        status = "Ready"
     }
 
     // MARK: - Recording
