@@ -6,9 +6,10 @@
 //
 
 import SwiftUI
+import Security
 
 struct LoginView: View {
-    @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var auth: AuthManager
     
     // MARK: - Email auth (Firebase wiring later)
     enum EmailAuthMode: String, CaseIterable, Identifiable {
@@ -24,7 +25,6 @@ struct LoginView: View {
     
     @State private var isSubmitting: Bool = false
     @State private var errorMessage: String? = nil
-    @State private var didSubmit: Bool = false
     
     var body: some View {
         GeometryReader { geo in
@@ -196,7 +196,6 @@ struct LoginView: View {
                                 Button {
                                     // Placeholder: wire password reset later
                                     errorMessage = "Password reset will be added soon."
-                                    didSubmit = false
                                 } label: {
                                     Text("Forgot password?")
                                         .font(.footnote)
@@ -208,7 +207,6 @@ struct LoginView: View {
                                 Button {
                                     // Placeholder: wire Sign in with Apple later
                                     errorMessage = "Apple sign-in will be added soon."
-                                    didSubmit = false
                                 } label: {
                                     HStack(spacing: 6) {
                                         Image(systemName: "applelogo")
@@ -219,14 +217,6 @@ struct LoginView: View {
                                 }
                             }
                             .padding(.top, 2)
-                            
-                            if didSubmit {
-                                Text("Signed in (mock). Firebase wiring coming next.")
-                                    .font(.footnote)
-                                    .foregroundColor(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.top, 2)
-                            }
                         }
                         .padding(18)
                         .background(
@@ -346,7 +336,6 @@ struct LoginView: View {
     
     private func submitEmailAuth() {
         errorMessage = nil
-        didSubmit = false
         
         guard isEmailLikelyValid else { errorMessage = "Please enter a valid email."; return }
         guard isPasswordLikelyValid else { errorMessage = "Password must be at least 6 characters."; return }
@@ -385,21 +374,126 @@ struct LoginView: View {
                 
                 let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
                 
-                // TODO: store token for later API calls (Keychain is best; for demo you can use UserDefaults)
-                UserDefaults.standard.set(decoded.access_token, forKey: "access_token")
-                
+                // Persist token securely and update global session state
+                KeychainStore.save(decoded.access_token, forKey: "access_token")
                 await MainActor.run {
+                    auth.signIn(accessToken: decoded.access_token, email: decoded.user.email)
                     isSubmitting = false
-                    didSubmit = true
                     errorMessage = nil
                 }
             } catch {
                 await MainActor.run {
                     isSubmitting = false
-                    didSubmit = false
                     errorMessage = error.localizedDescription
                 }
             }
+        }
+    }
+}
+
+// MARK: - Session / Keychain
+@MainActor
+final class AuthManager: ObservableObject {
+    @Published private(set) var isAuthenticated: Bool = false
+    @Published private(set) var accessToken: String? = nil
+    @Published private(set) var email: String? = nil
+
+    init() {
+        // Restore session if a token exists
+        let token = KeychainStore.load(forKey: "access_token")
+        if let token, !token.isEmpty {
+            self.accessToken = token
+            self.isAuthenticated = true
+        }
+    }
+
+    func signIn(accessToken: String, email: String) {
+        self.accessToken = accessToken
+        self.email = email
+        self.isAuthenticated = true
+        KeychainStore.save(accessToken, forKey: "access_token")
+    }
+
+    func signOut() {
+        self.isAuthenticated = false
+        self.accessToken = nil
+        self.email = nil
+        KeychainStore.delete(forKey: "access_token")
+    }
+}
+
+struct KeychainStore {
+    static func save(_ value: String, forKey key: String) {
+        guard let data = value.data(using: .utf8) else { return }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]
+
+        // Replace existing
+        SecItemDelete(query as CFDictionary)
+
+        let add: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+
+        SecItemAdd(add as CFDictionary, nil)
+    }
+
+    static func load(forKey key: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess,
+              let data = item as? Data,
+              let str = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return str
+    }
+
+    static func delete(forKey key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+}
+
+
+struct AuthenticatedRootView: View {
+    @EnvironmentObject private var auth: AuthManager
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Text("You’re signed in")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+
+                if let email = auth.email {
+                    Text(email)
+                        .foregroundColor(.secondary)
+                }
+
+                Button("Sign out") {
+                    auth.signOut()
+                }
+                .buttonStyle(PrimaryPillButtonStyle())
+                .padding(.horizontal, 24)
+            }
+            .padding()
+            .navigationTitle("Home")
         }
     }
 }

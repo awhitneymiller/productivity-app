@@ -19,6 +19,7 @@ import SwiftUI
 
 struct HomePage: View {
     @StateObject var focusStore = FocusStatsStore()
+    @State private var showLogoutConfirm: Bool = false
 
     private let backgroundGradient = LinearGradient(
         gradient: Gradient(colors: [
@@ -142,6 +143,29 @@ struct HomePage: View {
                 .padding(.bottom, 32)
             }
             .navigationTitle("Today")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showLogoutConfirm = true
+                    } label: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .imageScale(.medium)
+                    }
+                    .accessibilityLabel("Log Out")
+                }
+            }
+            .alert("Log out?", isPresented: $showLogoutConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Log Out", role: .destructive) {
+                    // TODO: Wire to your auth/session manager.
+                    // Example patterns:
+                    // 1) AppStorage flag: isLoggedIn = false
+                    // 2) Firebase Auth: try? Auth.auth().signOut()
+                    // 3) SessionManager: session.signOut()
+                }
+            } message: {
+                Text("You can log back in any time.")
+            }
             .background(backgroundGradient.ignoresSafeArea())
         }
     }
