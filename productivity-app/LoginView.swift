@@ -9,23 +9,23 @@ import SwiftUI
 
 struct LoginView: View {
     @Environment(\.colorScheme) private var colorScheme
-
+    
     // MARK: - Email auth (Firebase wiring later)
     enum EmailAuthMode: String, CaseIterable, Identifiable {
         case signIn = "Sign In"
         case signUp = "Create Account"
         var id: String { rawValue }
     }
-
+    
     @State private var authMode: EmailAuthMode = .signIn
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
-
+    
     @State private var isSubmitting: Bool = false
     @State private var errorMessage: String? = nil
     @State private var didSubmit: Bool = false
-
+    
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -40,14 +40,14 @@ struct LoginView: View {
                     endPoint: .bottomTrailing
                 )
                 .ignoresSafeArea()
-
+                
                 // Soft accent blobs
                 accentBlobs(in: geo.size)
                     .ignoresSafeArea()
-
+                
                 VStack(spacing: 18) {
                     Spacer()
-
+                    
                     // Title block
                     VStack(spacing: 10) {
                         Text("Smart Schedule")
@@ -62,7 +62,7 @@ struct LoginView: View {
                                     endPoint: .trailing
                                 )
                             )
-
+                        
                         Text("An AI-powered productivity app built for how real people live")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
@@ -70,7 +70,7 @@ struct LoginView: View {
                             .padding(.horizontal, 26)
                     }
                     .padding(.top, 20)
-
+                    
                     // Feature bullets
                     VStack(alignment: .leading, spacing: 10) {
                         bulletRow(icon: "square.grid.2x2.fill", text: "All-in-one: tasks, calendar, reminders, notes")
@@ -86,7 +86,7 @@ struct LoginView: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .padding(.horizontal, 18)
-
+                    
                     // Auth (Email/Password for now; Firebase wiring later)
                     VStack(spacing: 12) {
                         // Mode toggle
@@ -98,14 +98,14 @@ struct LoginView: View {
                         .pickerStyle(.segmented)
                         .padding(.horizontal, 6)
                         .padding(.bottom, 6)
-
+                        
                         VStack(spacing: 10) {
                             // Email
                             HStack(spacing: 10) {
                                 Image(systemName: "envelope.fill")
                                     .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
                                     .frame(width: 22)
-
+                                
                                 TextField("Email", text: $email)
                                     .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled(true)
@@ -120,13 +120,13 @@ struct LoginView: View {
                                     .stroke(Color.white.opacity(0.45), lineWidth: 1)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-
+                            
                             // Password
                             HStack(spacing: 10) {
                                 Image(systemName: "lock.fill")
                                     .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
                                     .frame(width: 22)
-
+                                
                                 SecureField("Password", text: $password)
                                     .textContentType(authMode == .signUp ? .newPassword : .password)
                             }
@@ -138,14 +138,14 @@ struct LoginView: View {
                                     .stroke(Color.white.opacity(0.45), lineWidth: 1)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-
+                            
                             // Confirm password (sign up only)
                             if authMode == .signUp {
                                 HStack(spacing: 10) {
                                     Image(systemName: "lock.rotation")
                                         .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
                                         .frame(width: 22)
-
+                                    
                                     SecureField("Confirm password", text: $confirmPassword)
                                         .textContentType(.newPassword)
                                 }
@@ -158,7 +158,7 @@ struct LoginView: View {
                                 )
                                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                             }
-
+                            
                             // Inline error
                             if let errorMessage {
                                 Text(errorMessage)
@@ -167,7 +167,7 @@ struct LoginView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.top, 2)
                             }
-
+                            
                             // Submit
                             Button {
                                 submitEmailAuth()
@@ -180,7 +180,7 @@ struct LoginView: View {
                                         Image(systemName: authMode == .signUp ? "person.badge.plus" : "person.fill.checkmark")
                                             .font(.system(size: 16, weight: .semibold))
                                     }
-
+                                    
                                     Text(authMode == .signUp ? "Create account" : "Sign in")
                                         .font(.headline)
                                 }
@@ -190,7 +190,7 @@ struct LoginView: View {
                             .buttonStyle(PrimaryPillButtonStyle())
                             .disabled(!canSubmit || isSubmitting)
                             .opacity((!canSubmit || isSubmitting) ? 0.7 : 1.0)
-
+                            
                             // Secondary actions
                             HStack {
                                 Button {
@@ -202,9 +202,9 @@ struct LoginView: View {
                                         .font(.footnote)
                                         .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
                                 }
-
+                                
                                 Spacer()
-
+                                
                                 Button {
                                     // Placeholder: wire Sign in with Apple later
                                     errorMessage = "Apple sign-in will be added soon."
@@ -219,7 +219,7 @@ struct LoginView: View {
                                 }
                             }
                             .padding(.top, 2)
-
+                            
                             if didSubmit {
                                 Text("Signed in (mock). Firebase wiring coming next.")
                                     .font(.footnote)
@@ -244,7 +244,7 @@ struct LoginView: View {
                                 .stroke(Color.white.opacity(0.45), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-
+                        
                         Text("By continuing, you agree to our Terms and Privacy Policy")
                             .font(.footnote)
                             .foregroundColor(.secondary)
@@ -253,16 +253,16 @@ struct LoginView: View {
                             .padding(.top, 6)
                     }
                     .padding(.horizontal, 18)
-
+                    
                     Spacer(minLength: 26)
                 }
                 .frame(width: geo.size.width)
             }
         }
     }
-
+    
     // MARK: - Pieces
-
+    
     private func accentBlobs(in size: CGSize) -> some View {
         ZStack {
             Circle()
@@ -270,13 +270,13 @@ struct LoginView: View {
                 .frame(width: size.width * 0.75, height: size.width * 0.75)
                 .blur(radius: 18)
                 .offset(x: -size.width * 0.25, y: -size.height * 0.35)
-
+            
             Circle()
                 .fill(Color(red: 0.76, green: 0.70, blue: 0.95).opacity(0.35))
                 .frame(width: size.width * 0.70, height: size.width * 0.70)
                 .blur(radius: 18)
                 .offset(x: size.width * 0.35, y: -size.height * 0.20)
-
+            
             Circle()
                 .fill(Color(red: 0.90, green: 0.93, blue: 0.99).opacity(0.55))
                 .frame(width: size.width * 0.85, height: size.width * 0.85)
@@ -284,23 +284,23 @@ struct LoginView: View {
                 .offset(x: size.width * 0.05, y: size.height * 0.35)
         }
     }
-
+    
     private func bulletRow(icon: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
                 .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
                 .frame(width: 22)
                 .padding(.top, 1)
-
+            
             Text(text)
                 .font(.subheadline)
                 .foregroundColor(.primary)
                 .fixedSize(horizontal: false, vertical: true)
-
+            
             Spacer(minLength: 0)
         }
     }
-
+    
     private var cardBackground: some ShapeStyle {
         LinearGradient(
             gradient: Gradient(colors: [
@@ -311,21 +311,21 @@ struct LoginView: View {
             endPoint: .bottomTrailing
         )
     }
-
-
+    
+    
     // MARK: - Validation + Mock submit
-
+    
     private var trimmedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
-
+    
     private var isEmailLikelyValid: Bool {
         // Simple check for now; Firebase will validate for real
         trimmedEmail.contains("@") && trimmedEmail.contains(".") && trimmedEmail.count >= 5
     }
-
+    
     private var isPasswordLikelyValid: Bool {
         password.count >= 6
     }
-
+    
     private var canSubmit: Bool {
         if authMode == .signUp {
             return isEmailLikelyValid && isPasswordLikelyValid && !confirmPassword.isEmpty && confirmPassword == password
@@ -333,34 +333,73 @@ struct LoginView: View {
             return isEmailLikelyValid && isPasswordLikelyValid
         }
     }
-
+    
+    struct AuthResponse: Decodable {
+        let access_token: String
+        let user: UserDTO
+    }
+    
+    struct UserDTO: Decodable {
+        let id: Int
+        let email: String
+    }
+    
     private func submitEmailAuth() {
         errorMessage = nil
         didSubmit = false
-
-        // Front-end validation (Firebase will be the real source of truth)
-        guard isEmailLikelyValid else {
-            errorMessage = "Please enter a valid email."
+        
+        guard isEmailLikelyValid else { errorMessage = "Please enter a valid email."; return }
+        guard isPasswordLikelyValid else { errorMessage = "Password must be at least 6 characters."; return }
+        if authMode == .signUp, confirmPassword != password {
+            errorMessage = "Passwords do not match."
             return
         }
-        guard isPasswordLikelyValid else {
-            errorMessage = "Password must be at least 6 characters."
-            return
-        }
-        if authMode == .signUp {
-            guard confirmPassword == password else {
-                errorMessage = "Passwords do not match."
-                return
-            }
-        }
-
+        
         isSubmitting = true
-
-        // Mock network delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            isSubmitting = false
-            didSubmit = true
-            errorMessage = nil
+        
+        Task {
+            do {
+                let endpoint = authMode == .signUp ? "/api/auth/register" : "/api/auth/login"
+                let url = URL(string: "http://localhost:5000\(endpoint)")!
+                
+                var req = URLRequest(url: url)
+                req.httpMethod = "POST"
+                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                
+                let payload: [String: Any] = [
+                    "email": trimmedEmail,
+                    "password": password
+                ]
+                req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                let http = resp as? HTTPURLResponse
+                
+                guard let http else { throw URLError(.badServerResponse) }
+                
+                if !(200..<300).contains(http.statusCode) {
+                    let msg = String(data: data, encoding: .utf8) ?? "Request failed"
+                    throw NSError(domain: "API", code: http.statusCode,
+                                  userInfo: [NSLocalizedDescriptionKey: msg])
+                }
+                
+                let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
+                
+                // TODO: store token for later API calls (Keychain is best; for demo you can use UserDefaults)
+                UserDefaults.standard.set(decoded.access_token, forKey: "access_token")
+                
+                await MainActor.run {
+                    isSubmitting = false
+                    didSubmit = true
+                    errorMessage = nil
+                }
+            } catch {
+                await MainActor.run {
+                    isSubmitting = false
+                    didSubmit = false
+                    errorMessage = error.localizedDescription
+                }
+            }
         }
     }
 }
