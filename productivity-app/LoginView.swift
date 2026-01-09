@@ -10,6 +10,22 @@ import SwiftUI
 struct LoginView: View {
     @Environment(\.colorScheme) private var colorScheme
 
+    // MARK: - Email auth (Firebase wiring later)
+    enum EmailAuthMode: String, CaseIterable, Identifiable {
+        case signIn = "Sign In"
+        case signUp = "Create Account"
+        var id: String { rawValue }
+    }
+
+    @State private var authMode: EmailAuthMode = .signIn
+    @State private var email: String = ""
+    @State private var password: String = ""
+    @State private var confirmPassword: String = ""
+
+    @State private var isSubmitting: Bool = false
+    @State private var errorMessage: String? = nil
+    @State private var didSubmit: Bool = false
+
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -71,35 +87,163 @@ struct LoginView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .padding(.horizontal, 18)
 
-                    // Auth buttons
+                    // Auth (Email/Password for now; Firebase wiring later)
                     VStack(spacing: 12) {
-                        Button {
-                            // Placeholder: wire Sign in with Apple later
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "applelogo")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text("Continue with Apple")
-                                    .font(.headline)
+                        // Mode toggle
+                        Picker("", selection: $authMode) {
+                            ForEach(EmailAuthMode.allCases) { mode in
+                                Text(mode.rawValue).tag(mode)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
                         }
-                        .buttonStyle(PrimaryPillButtonStyle())
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, 6)
+                        .padding(.bottom, 6)
 
-                        Button {
-                            // Placeholder: wire other options later
-                        } label: {
+                        VStack(spacing: 10) {
+                            // Email
                             HStack(spacing: 10) {
-                                Image(systemName: "ellipsis")
-                                    .font(.system(size: 16, weight: .semibold))
-                                Text("Other options")
-                                    .font(.headline)
+                                Image(systemName: "envelope.fill")
+                                    .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
+                                    .frame(width: 22)
+
+                                TextField("Email", text: $email)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled(true)
+                                    .keyboardType(.emailAddress)
+                                    .textContentType(.emailAddress)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 14)
+                            .background(cardBackground)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                            // Password
+                            HStack(spacing: 10) {
+                                Image(systemName: "lock.fill")
+                                    .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
+                                    .frame(width: 22)
+
+                                SecureField("Password", text: $password)
+                                    .textContentType(authMode == .signUp ? .newPassword : .password)
+                            }
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 14)
+                            .background(cardBackground)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                            // Confirm password (sign up only)
+                            if authMode == .signUp {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "lock.rotation")
+                                        .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
+                                        .frame(width: 22)
+
+                                    SecureField("Confirm password", text: $confirmPassword)
+                                        .textContentType(.newPassword)
+                                }
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 14)
+                                .background(cardBackground)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            }
+
+                            // Inline error
+                            if let errorMessage {
+                                Text(errorMessage)
+                                    .font(.footnote)
+                                    .foregroundColor(.red)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.top, 2)
+                            }
+
+                            // Submit
+                            Button {
+                                submitEmailAuth()
+                            } label: {
+                                HStack(spacing: 10) {
+                                    if isSubmitting {
+                                        ProgressView()
+                                            .tint(.white)
+                                    } else {
+                                        Image(systemName: authMode == .signUp ? "person.badge.plus" : "person.fill.checkmark")
+                                            .font(.system(size: 16, weight: .semibold))
+                                    }
+
+                                    Text(authMode == .signUp ? "Create account" : "Sign in")
+                                        .font(.headline)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                            }
+                            .buttonStyle(PrimaryPillButtonStyle())
+                            .disabled(!canSubmit || isSubmitting)
+                            .opacity((!canSubmit || isSubmitting) ? 0.7 : 1.0)
+
+                            // Secondary actions
+                            HStack {
+                                Button {
+                                    // Placeholder: wire password reset later
+                                    errorMessage = "Password reset will be added soon."
+                                    didSubmit = false
+                                } label: {
+                                    Text("Forgot password?")
+                                        .font(.footnote)
+                                        .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
+                                }
+
+                                Spacer()
+
+                                Button {
+                                    // Placeholder: wire Sign in with Apple later
+                                    errorMessage = "Apple sign-in will be added soon."
+                                    didSubmit = false
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "applelogo")
+                                        Text("Apple")
+                                    }
+                                    .font(.footnote)
+                                    .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
+                                }
+                            }
+                            .padding(.top, 2)
+
+                            if didSubmit {
+                                Text("Signed in (mock). Firebase wiring coming next.")
+                                    .font(.footnote)
+                                    .foregroundColor(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.top, 2)
+                            }
                         }
-                        .buttonStyle(SecondaryPillButtonStyle())
+                        .padding(18)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(0.58),
+                                    Color.white.opacity(0.42)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
 
                         Text("By continuing, you agree to our Terms and Privacy Policy")
                             .font(.footnote)
@@ -166,6 +310,58 @@ struct LoginView: View {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+
+    // MARK: - Validation + Mock submit
+
+    private var trimmedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private var isEmailLikelyValid: Bool {
+        // Simple check for now; Firebase will validate for real
+        trimmedEmail.contains("@") && trimmedEmail.contains(".") && trimmedEmail.count >= 5
+    }
+
+    private var isPasswordLikelyValid: Bool {
+        password.count >= 6
+    }
+
+    private var canSubmit: Bool {
+        if authMode == .signUp {
+            return isEmailLikelyValid && isPasswordLikelyValid && !confirmPassword.isEmpty && confirmPassword == password
+        } else {
+            return isEmailLikelyValid && isPasswordLikelyValid
+        }
+    }
+
+    private func submitEmailAuth() {
+        errorMessage = nil
+        didSubmit = false
+
+        // Front-end validation (Firebase will be the real source of truth)
+        guard isEmailLikelyValid else {
+            errorMessage = "Please enter a valid email."
+            return
+        }
+        guard isPasswordLikelyValid else {
+            errorMessage = "Password must be at least 6 characters."
+            return
+        }
+        if authMode == .signUp {
+            guard confirmPassword == password else {
+                errorMessage = "Passwords do not match."
+                return
+            }
+        }
+
+        isSubmitting = true
+
+        // Mock network delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            isSubmitting = false
+            didSubmit = true
+            errorMessage = nil
+        }
     }
 }
 
