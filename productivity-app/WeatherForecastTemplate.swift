@@ -5,6 +5,8 @@
 //  Created by Audrey W-M on 1/8/26.
 //
 
+import SwiftUI
+
 // MARK: - Focus Stats Store (placeholder)
 // If you already have a FocusStatsStore elsewhere, delete this duplicate and
 // import/use the existing one instead.
@@ -15,9 +17,9 @@ final class FocusStatsStore: ObservableObject {
     init() {}
 }
 
-import SwiftUI
-
 struct HomePage: View {
+    @EnvironmentObject private var auth: AuthManager
+
     @StateObject var focusStore = FocusStatsStore()
     @State private var showLogoutConfirm: Bool = false
 
@@ -150,6 +152,16 @@ struct HomePage: View {
                     } label: {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
                             .imageScale(.medium)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color(red: 0.39, green: 0.28, blue: 0.60),
+                                        Color(red: 0.76, green: 0.34, blue: 0.60)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
                     }
                     .accessibilityLabel("Log Out")
                 }
@@ -157,11 +169,7 @@ struct HomePage: View {
             .alert("Log out?", isPresented: $showLogoutConfirm) {
                 Button("Cancel", role: .cancel) {}
                 Button("Log Out", role: .destructive) {
-                    // TODO: Wire to your auth/session manager.
-                    // Example patterns:
-                    // 1) AppStorage flag: isLoggedIn = false
-                    // 2) Firebase Auth: try? Auth.auth().signOut()
-                    // 3) SessionManager: session.signOut()
+                    auth.signOut()
                 }
             } message: {
                 Text("You can log back in any time.")
@@ -347,4 +355,5 @@ struct OverviewRow: View {
 
 #Preview {
     HomePage()
+        .environmentObject(AuthManager())
 }
