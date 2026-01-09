@@ -18,10 +18,10 @@ struct AddTaskPage: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var mode: InputMode = .quick
+    @StateObject private var voiceTranscriber = VoiceTranscriber()
 
     // MARK: - Quick capture
     @State private var naturalInput: String = "Meet with Maya tomorrow at 3, remind me 30 min before, and bring my charger"
-    @State private var isListening: Bool = false
     @State private var didRunAI: Bool = false
 
     // Parsed preview (placeholder)
@@ -150,15 +150,14 @@ struct AddTaskPage: View {
                 Spacer()
 
                 Button {
-                    // Placeholder: wire speech-to-text later
                     withAnimation(.easeOut(duration: 0.12)) {
-                        isListening.toggle()
+                        voiceTranscriber.toggle()
                     }
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: isListening ? "waveform.circle.fill" : "mic.circle.fill")
+                        Image(systemName: voiceTranscriber.isRecording ? "waveform.circle.fill" : "mic.circle.fill")
                             .font(.system(size: 18, weight: .semibold))
-                        Text(isListening ? "Listening" : "Speak")
+                        Text(voiceTranscriber.isRecording ? "Listening" : "Speak")
                             .font(.subheadline.weight(.semibold))
                     }
                     .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
@@ -173,6 +172,10 @@ struct AddTaskPage: View {
                 }
                 .buttonStyle(.plain)
             }
+            Text(voiceTranscriber.status)
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(.secondary)
+                .padding(.top, 2)
 
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $naturalInput)
@@ -182,6 +185,14 @@ struct AddTaskPage: View {
                     .padding(10)
                     .background(Color.white.opacity(0.55))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .onChange(of: voiceTranscriber.transcript) { newValue in
+                        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return }
+                        // Only overwrite when recording has stopped (so we don’t fight the live UI while speaking)
+                        guard !voiceTranscriber.isRecording else { return }
+                        naturalInput = trimmed
+                        didRunAI = false
+                    }
 
                 if naturalInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Example: \"Work on CMSI homework tonight for 45 minutes, remind me at 7, and pack my laptop\"")
@@ -196,6 +207,7 @@ struct AddTaskPage: View {
                 Button {
                     // Placeholder: clear
                     naturalInput = ""
+                    voiceTranscriber.transcript = ""
                     didRunAI = false
                 } label: {
                     Text("Clear")
