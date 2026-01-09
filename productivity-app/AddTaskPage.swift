@@ -185,8 +185,8 @@ struct AddTaskPage: View {
                     .padding(10)
                     .background(Color.white.opacity(0.55))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .onChange(of: voiceTranscriber.transcript) { newValue in
-                        let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .onChange(of: voiceTranscriber.transcript) {
+                        let trimmed = voiceTranscriber.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmed.isEmpty else { return }
                         // Only overwrite when recording has stopped (so we don’t fight the live UI while speaking)
                         guard !voiceTranscriber.isRecording else { return }
@@ -218,18 +218,13 @@ struct AddTaskPage: View {
                 .buttonStyle(SecondaryPillButtonStyle())
 
                 Button {
-                    // Placeholder: AI parse
                     didRunAI = true
-
-                    // Super simple demo behavior: keep existing placeholders unless text changes
-                    if naturalInput.lowercased().contains("tomorrow") { parsedDate = "Tomorrow" }
-                    if naturalInput.lowercased().contains("3") { parsedTime = "3:00 PM" }
-
-                    if naturalInput.count > 8 {
-                        parsedTitle = guessTitle(from: naturalInput)
-                    }
-
+                    parsedTitle = guessTitle(from: naturalInput)
                     parsedExtras = guessExtras(from: naturalInput)
+                    // Very light placeholder date/time/reminder detection
+                    parsedDate = naturalInput.lowercased().contains("tomorrow") ? "Tomorrow" : (naturalInput.lowercased().contains("today") ? "Today" : "")
+                    parsedTime = (naturalInput.lowercased().contains(" at ") ? "" : parsedTime)
+                    parsedReminder = naturalInput.lowercased().contains("remind") ? (parsedReminder.isEmpty ? "15 min before" : parsedReminder) : ""
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "sparkles")
@@ -261,35 +256,41 @@ struct AddTaskPage: View {
                     .foregroundColor(didRunAI ? Color(red: 0.39, green: 0.28, blue: 0.60) : .secondary)
             }
 
-            previewRow(label: "Title", value: didRunAI ? parsedTitle : "—")
-            previewRow(label: "When", value: didRunAI ? "\(parsedDate) • \(parsedTime)" : "—")
-            previewRow(label: "Reminder", value: didRunAI ? parsedReminder : "—")
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Extra")
-                    .font(.subheadline.weight(.semibold))
+            if !didRunAI {
+                Text("—")
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
+            } else {
+                previewRow(label: "Title", value: parsedTitle.isEmpty ? "New task" : parsedTitle)
+                previewRow(label: "Date", value: parsedDate.isEmpty ? "—" : parsedDate)
+                previewRow(label: "Time", value: parsedTime.isEmpty ? "—" : parsedTime)
 
-                if didRunAI && !parsedExtras.isEmpty {
-                    FlowChips(items: parsedExtras)
-                } else {
-                    Text("—")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                if !parsedReminder.isEmpty {
+                    previewRow(label: "Reminder", value: parsedReminder)
                 }
-            }
-            .padding(.top, 2)
 
-            Text("You’ll be able to edit anything before saving.")
-                .font(.footnote)
-                .foregroundColor(.secondary)
-                .padding(.top, 2)
+                if !parsedExtras.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Extra")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.secondary)
+
+                        FlowChips(items: parsedExtras)
+                    }
+                }
+
+                Text("You’ll be able to edit anything before saving.")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 2)
+            }
         }
         .padding(16)
         .background(glassCard)
         .overlay(glassStroke)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
+
 
     private var manualCard: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -504,28 +505,34 @@ struct AddTaskPage: View {
     // MARK: - Tiny placeholder “AI” helpers
 
     private func guessTitle(from text: String) -> String {
-        // naive: take up to the first comma or "and"
-        let lowered = text
-        let stops = [",", " and ", " then ", " so "]
-        var cut = lowered
-        for stop in stops {
-            if let r = lowered.range(of: stop) {
-                cut = String(lowered[..<r.lowerBound])
-                break
-            }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return "New task" }
+
+        // Cut at common separators
+        let lower = trimmed.lowercased()
+        if let r = lower.range(of: ",") {
+            let head = String(trimmed[..<r.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return head.isEmpty ? trimmed : head
         }
-        let trimmed = cut.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "New task" : trimmed
+        if let r = lower.range(of: " and ") {
+            let head = String(trimmed[..<r.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return head.isEmpty ? trimmed : head
+        }
+
+        return trimmed
     }
 
     private func guessExtras(from text: String) -> [String] {
-        let t = text.lowercased()
-        var out: [String] = []
-        if t.contains("charger") { out.append("Bring charger") }
-        if t.contains("keys") { out.append("Grab keys") }
-        if t.contains("water") || t.contains("bottle") { out.append("Bring water") }
-        if t.contains("laptop") { out.append("Bring laptop") }
-        return out
+        let lower = text.lowercased()
+        var extras: [String] = []
+
+        if lower.contains("charger") { extras.append("Bring charger") }
+        if lower.contains("keys") { extras.append("Grab keys") }
+        if lower.contains("wallet") { extras.append("Bring wallet") }
+        if lower.contains("laptop") { extras.append("Bring laptop") }
+        if lower.contains("water") || lower.contains("bottle") { extras.append("Bring water") }
+
+        return Array(Set(extras)).sorted()
     }
 }
 
@@ -634,7 +641,7 @@ struct FlexibleView<Data: Collection, Content: View>: View where Data.Element: H
         return VStack(alignment: alignment, spacing: spacing) {
             ForEach(rows.indices, id: \.self) { r in
                 HStack(spacing: spacing) {
-                    ForEach(rows[r], id: \ .self) { item in
+                    ForEach(rows[r], id: \.self) { item in
                         content(item)
                     }
                     Spacer(minLength: 0)
@@ -644,47 +651,6 @@ struct FlexibleView<Data: Collection, Content: View>: View where Data.Element: H
     }
 }
 
-// MARK: - Button Styles (kept local so this page compiles even if other files change)
-
-struct AButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 0.76, green: 0.70, blue: 0.95),
-                        Color(red: 0.93, green: 0.62, blue: 0.82)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .clipShape(Capsule())
-            .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 6)
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
-}
-
-struct OtherPillButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
-            .background(
-                RoundedRectangle(cornerRadius: 999, style: .continuous)
-                    .fill(Color.white.opacity(0.65))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 999, style: .continuous)
-                            .stroke(Color.white.opacity(0.55), lineWidth: 1)
-                    )
-            )
-            .clipShape(Capsule())
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
-}
 
 #Preview {
     AddTaskPage()
