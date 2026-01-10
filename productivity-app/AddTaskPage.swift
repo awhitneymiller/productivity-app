@@ -603,15 +603,16 @@ struct AddTaskPage: View {
 
             // Optional time
             if hasTime {
-                payload["due_time"] = timeFormatter.string(from: time)
+                let cal = Calendar.current
+                let hour = cal.component(.hour, from: time)
+                let minute = cal.component(.minute, from: time)
+                payload["due_time"] = String(format: "%02d:%02d", hour, minute)
 
-                // Optional reminder (your Flask code currently expects "reminder_minutes")
                 if addReminder {
                     payload["reminder_minutes"] = reminderMinutesBefore
-                    // If you change Flask to use reminder_offset_minutes, use:
-                    // payload["reminder_offset_minutes"] = reminderMinutesBefore
                 }
             }
+
 
             // Optional tags/notes
             let tags = tagText.trimmingCharacters(in: .whitespacesAndNewlines)
