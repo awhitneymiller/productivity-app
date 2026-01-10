@@ -16,6 +16,13 @@ struct TimeBlockingView: View {
     @State private var showingLateSheet: Bool = false
     @State private var lastShiftMinutes: Int = 0
     @State private var preShiftBlocks: [TimeBlock] = []
+    
+    @StateObject private var learning = TBTimeLearningStore()
+
+    @State private var showingLogActualSheet: Bool = false
+    @State private var logBlockID: UUID? = nil
+    @State private var logActualMinutes: Int = 0
+    @State private var editingBlock: TimeBlock? = nil
 
     init(initialDate: Date = .now) {
         _selectedDate = State(initialValue: initialDate)
@@ -23,10 +30,10 @@ struct TimeBlockingView: View {
 
     // Placeholder blocks (we'll wire real data later)
     @State private var blocks: [TimeBlock] = [
-        TimeBlock(title: "Deep work", note: "Finish HW + project", startHour: 9, startMinute: 0, endHour: 10, endMinute: 30, kind: .focus),
-        TimeBlock(title: "Class", note: "CMSI lecture", startHour: 11, startMinute: 0, endHour: 12, endMinute: 15, kind: .event),
-        TimeBlock(title: "Lunch", note: "Quick reset", startHour: 12, startMinute: 30, endHour: 13, endMinute: 0, kind: .breakTime),
-        TimeBlock(title: "Errands", note: "Grab keys + charger", startHour: 15, startMinute: 0, endHour: 15, endMinute: 45, kind: .task)
+        TimeBlock(title: "Deep work", note: "Finish HW + project", startHour: 9, startMinute: 0, endHour: 10, endMinute: 30, kind: TBBlockKind.focus),
+        TimeBlock(title: "Class", note: "CMSI lecture", startHour: 11, startMinute: 0, endHour: 12, endMinute: 15, kind: TBBlockKind.event),
+        TimeBlock(title: "Lunch", note: "Quick reset", startHour: 12, startMinute: 30, endHour: 13, endMinute: 0, kind: TBBlockKind.breakTime),
+        TimeBlock(title: "Errands", note: "Grab keys + charger", startHour: 15, startMinute: 0, endHour: 15, endMinute: 45, kind: TBBlockKind.task)
     ]
 
     private let hours: [Int] = Array(6...22)
@@ -112,6 +119,28 @@ struct TimeBlockingView: View {
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingLogActualSheet) {
+            LogActualSheet(
+                title: logBlockTitle,
+                plannedMinutes: logPlannedMinutes,
+                actualMinutes: $logActualMinutes,
+                onSave: { saveLogActual() },
+                onCancel: { showingLogActualSheet = false }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $editingBlock) { block in
+            NavigationStack {
+                TaskView(
+                    initial: taskDraft(from: block),
+                    onSave: { updated in
+                        applyTaskDraft(updated, toBlockID: block.id)
+                    },
+                    onDelete: nil
+                )
+            }
         }
     }
 
@@ -253,6 +282,104 @@ struct TimeBlockingView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
         }
     }
+    // MARK: - AI time learning
+
+    private func suggestedMinutes(for block: TimeBlock) -> Int? {
+        guard block.kind == TBBlockKind.task || block.kind == TBBlockKind.focus else { return nil }
+        guard let predicted = learning.predictedMinutes(forKey: block.learnKey) else { return nil }
+
+        let planned = block.plannedMinutes
+        if abs(predicted - planned) < 5 { return nil } // don’t nag
+        return predicted
+    }
+
+    private func applySuggestedDuration(for id: UUID) {
+        guard let idx = blocks.firstIndex(where: { $0.id == id }) else { return }
+        guard let suggested = suggestedMinutes(for: blocks[idx]) else { return }
+
+        var b = blocks[idx]
+        let start = b.startTotalMinutes
+        let end = start + suggested
+
+        b.endHour = max(0, min(23, end / 60))
+        b.endMinute = max(0, min(59, end % 60))
+        blocks[idx] = b
+    }
+
+    private func beginLogActual(for block: TimeBlock) {
+        logBlockID = block.id
+        logActualMinutes = max(1, block.plannedMinutes)
+        showingLogActualSheet = true
+    }
+
+    private var logBlockTitle: String {
+        guard let id = logBlockID, let b = blocks.first(where: { $0.id == id }) else { return "" }
+        return b.title
+    }
+
+    private var logPlannedMinutes: Int {
+        guard let id = logBlockID, let b = blocks.first(where: { $0.id == id }) else { return 0 }
+        return b.plannedMinutes
+    }
+
+    private func saveLogActual() {
+        guard let id = logBlockID, let b = blocks.first(where: { $0.id == id }) else {
+            showingLogActualSheet = false
+            return
+        }
+
+        learning.recordCompletion(key: b.learnKey, actualMinutes: logActualMinutes)
+        showingLogActualSheet = false
+    }
+    // MARK: - TaskView bridge (edit details)
+
+    private func taskDraft(from block: TimeBlock) -> TaskDraft {
+        // Build a date using the selected day + the block's start time
+        let cal = Calendar.current
+        let day = cal.startOfDay(for: selectedDate)
+        let date = cal.date(byAdding: .minute, value: block.startTotalMinutes, to: day) ?? selectedDate
+
+        return TaskDraft(
+            id: block.id,
+            title: block.title,
+            hasDateTime: true,
+            date: date,
+            durationMinutes: max(1, block.plannedMinutes),
+            priority: .normal,
+            reminderEnabled: false,
+            reminderOffsetMinutes: 10,
+            tags: [],
+            notes: block.note,
+            attachments: []
+        )
+    }
+
+    private func applyTaskDraft(_ draft: TaskDraft, toBlockID id: UUID) {
+        guard let idx = blocks.firstIndex(where: { $0.id == id }) else { return }
+
+        var b = blocks[idx]
+        b.title = draft.title
+        b.note = draft.notes
+
+        // If TaskView has a date/time, align the block start to it (same selected day).
+        // Otherwise, keep the existing start.
+        let cal = Calendar.current
+        if draft.hasDateTime {
+            let h = cal.component(.hour, from: draft.date)
+            let m = cal.component(.minute, from: draft.date)
+            b.startHour = max(0, min(23, h))
+            b.startMinute = max(0, min(59, m))
+        }
+
+        // Apply duration by moving the end time.
+        let start = b.startTotalMinutes
+        let end = start + max(1, draft.durationMinutes)
+        b.endHour = max(0, min(23, end / 60))
+        b.endMinute = max(0, min(59, end % 60))
+
+        blocks[idx] = b
+        editingBlock = nil
+    }
 
     // MARK: - Timeline
 
@@ -273,12 +400,20 @@ struct TimeBlockingView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     // Visual timeline
-                    TimelineCard(hours: hours, blocks: blocks)
+                    TimelineCard(hours: hours, blocks: blocks) { tapped in
+                        editingBlock = tapped
+                    }
 
                     // List view
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(blocks.sorted(by: { $0.startTotalMinutes < $1.startTotalMinutes })) { block in
-                            BlockRow(block: block)
+                            BlockRow(
+                                block: block,
+                                suggestedMinutes: suggestedMinutes(for: block),
+                                onApplySuggestion: { applySuggestedDuration(for: block.id) },
+                                onLogActual: { beginLogActual(for: block) },
+                                onTap: { editingBlock = block }
+                            )
                         }
                     }
                 }
@@ -294,6 +429,7 @@ struct TimeBlockingView: View {
 private struct TimelineCard: View {
     let hours: [Int]
     let blocks: [TimeBlock]
+    let onTapBlock: (TimeBlock) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -318,7 +454,7 @@ private struct TimelineCard: View {
 
             VStack(spacing: 10) {
                 ForEach(hours, id: \.self) { hour in
-                    HourRow(hour: hour, blocks: blocks)
+                    HourRow(hour: hour, blocks: blocks, onTapBlock: onTapBlock)
                 }
             }
         }
@@ -335,6 +471,7 @@ private struct TimelineCard: View {
 private struct HourRow: View {
     let hour: Int
     let blocks: [TimeBlock]
+    let onTapBlock: (TimeBlock) -> Void
 
     private var hourLabel: String {
         let h = hour % 12 == 0 ? 12 : hour % 12
@@ -354,7 +491,9 @@ private struct HourRow: View {
 
                 // Show any blocks that start within this hour
                 ForEach(blocksStartingThisHour) { block in
-                    TimelineMiniBlock(block: block)
+                    TimelineMiniBlock(block: block) {
+                        onTapBlock(block)
+                    }
                 }
 
                 // Subtle empty space
@@ -377,33 +516,39 @@ private struct HourRow: View {
 
 private struct TimelineMiniBlock: View {
     let block: TimeBlock
+    let onTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(block.kind.color)
-                .frame(width: 10, height: 10)
+        Button {
+            onTap()
+        } label: {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(block.kind.color)
+                    .frame(width: 10, height: 10)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(block.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Palette.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(block.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Palette.textPrimary)
 
-                Text("\(block.timeRangeText)  •  \(block.durationText)")
-                    .font(.caption)
-                    .foregroundStyle(Palette.textSecondary)
+                    Text("\(block.timeRangeText)  •  \(block.durationText)")
+                        .font(.caption)
+                        .foregroundStyle(Palette.textSecondary)
+                }
+
+                Spacer(minLength: 0)
             }
-
-            Spacer(minLength: 0)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .background(block.kind.cardTint)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Palette.strokeSoft, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 14))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(block.kind.cardTint)
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Palette.strokeSoft, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .buttonStyle(.plain)
     }
 }
 
@@ -411,39 +556,98 @@ private struct TimelineMiniBlock: View {
 
 private struct BlockRow: View {
     let block: TimeBlock
+    let suggestedMinutes: Int?
+    let onApplySuggestion: () -> Void
+    let onLogActual: () -> Void
+    let onTap: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text(block.title)
-                        .font(.headline)
-                        .foregroundStyle(Palette.textPrimary)
+            Button {
+                onTap()
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Text(block.title)
+                            .font(.headline)
+                            .foregroundStyle(Palette.textPrimary)
 
-                    Text(block.kind.label)
-                        .font(.caption.weight(.semibold))
+                        Text(block.kind.label)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Palette.textSecondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Palette.chip)
+                            .clipShape(Capsule())
+                    }
+
+                    Text(block.note)
+                        .font(.subheadline)
                         .foregroundStyle(Palette.textSecondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Palette.chip)
-                        .clipShape(Capsule())
+                        .lineLimit(2)
+
+                    HStack(spacing: 8) {
+                        Text("\(block.timeRangeText) • \(block.durationText)")
+                            .font(.caption)
+                            .foregroundStyle(Palette.textSecondary)
+
+                        if let s = suggestedMinutes {
+                            Text("Suggested: \(formatMinutes(s))")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Palette.textPrimary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Palette.chip)
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    if suggestedMinutes != nil {
+                        Button {
+                            onApplySuggestion()
+                        } label: {
+                            Label("Apply suggestion", systemImage: "wand.and.stars")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Palette.accent)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(Palette.card)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Palette.strokeSoft, lineWidth: 1)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-
-                Text(block.note)
-                    .font(.subheadline)
-                    .foregroundStyle(Palette.textSecondary)
-                    .lineLimit(2)
-
-                Text("\(block.timeRangeText) • \(block.durationText)")
-                    .font(.caption)
-                    .foregroundStyle(Palette.textSecondary)
             }
+            .buttonStyle(.plain)
 
             Spacer(minLength: 0)
 
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Palette.textTertiary)
+            Menu {
+                Button {
+                    onLogActual()
+                } label: {
+                    Label("Log actual time", systemImage: "checkmark.circle")
+                }
+
+                if suggestedMinutes != nil {
+                    Button {
+                        onApplySuggestion()
+                    } label: {
+                        Label("Apply suggested duration", systemImage: "wand.and.stars")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Palette.textTertiary)
+                    .padding(10)
+                    .background(Palette.chip)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
         }
         .padding(14)
         .background(Palette.card)
@@ -452,6 +656,15 @@ private struct BlockRow: View {
                 .stroke(Palette.stroke, lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18))
+    }
+
+    private func formatMinutes(_ mins: Int) -> String {
+        let m = max(0, mins)
+        let h = m / 60
+        let r = m % 60
+        if h == 0 { return "\(r) min" }
+        if r == 0 { return "\(h) hr" }
+        return "\(h) hr \(r) min"
     }
 }
 
@@ -586,9 +799,11 @@ private struct TimeBlock: Identifiable {
     var startMinute: Int
     var endHour: Int
     var endMinute: Int
-    var kind: BlockKind
+    var kind: TBBlockKind
+    var learnKey: String { title.tbNormalizedLearnKey() }
+    var plannedMinutes: Int { max(0, endTotalMinutes - startTotalMinutes) }
 
-    init(id: UUID = UUID(), title: String, note: String, startHour: Int, startMinute: Int, endHour: Int, endMinute: Int, kind: BlockKind) {
+    init(id: UUID = UUID(), title: String, note: String, startHour: Int, startMinute: Int, endHour: Int, endMinute: Int, kind: TBBlockKind) {
         self.id = id
         self.title = title
         self.note = note
@@ -623,7 +838,7 @@ private struct TimeBlock: Identifiable {
     }
 }
 
-private enum BlockKind: String, CaseIterable {
+private enum TBBlockKind: String, CaseIterable {
     case focus
     case task
     case event
@@ -716,16 +931,192 @@ private enum Palette {
     // Fills
     static let fillSoft = Color.white.opacity(0.28)
 }
+// MARK: - AI Time Learning (EWMA, persisted)
 
-// MARK: - Preview
+@MainActor
+private final class TBTimeLearningStore: ObservableObject {
+    @Published private(set) var stats: [String: TBLearnStats] = [:]
 
-#Preview {
-    NavigationStack {
-        TimeBlockingView(initialDate: .now)
+    private let defaultsKey = "time_learning_stats_v1"
+
+    init() { load() }
+
+    func predictedMinutes(forKey rawKey: String) -> Int? {
+        let key = rawKey.tbNormalizedLearnKey()
+        guard let s = stats[key], s.samples > 0 else { return nil }
+        return max(5, Int(round(s.ewmaMinutes)))
+    }
+
+    func recordCompletion(key rawKey: String, actualMinutes: Int, alpha: Double = 0.25) {
+        let key = rawKey.tbNormalizedLearnKey()
+        let actual = Double(max(1, actualMinutes))
+
+        if var s = stats[key] {
+            s.ewmaMinutes = alpha * actual + (1.0 - alpha) * s.ewmaMinutes
+            s.samples += 1
+            s.lastUpdated = Date()
+            stats[key] = s
+        } else {
+            stats[key] = TBLearnStats(ewmaMinutes: actual, samples: 1, lastUpdated: Date())
+        }
+
+        save()
+    }
+
+    private func load() {
+        guard let data = UserDefaults.standard.data(forKey: defaultsKey) else { return }
+        do {
+            stats = try JSONDecoder().decode([String: TBLearnStats].self, from: data)
+        } catch {
+            stats = [:]
+        }
+    }
+
+    private func save() {
+        do {
+            let data = try JSONEncoder().encode(stats)
+            UserDefaults.standard.set(data, forKey: defaultsKey)
+        } catch {
+            // ignore
+        }
+    }
+}
+
+private struct TBLearnStats: Codable {
+    var ewmaMinutes: Double
+    var samples: Int
+    var lastUpdated: Date
+}
+
+private extension String {
+    func tbNormalizedLearnKey() -> String {
+        let lower = self.lowercased()
+        let allowed = lower.filter { $0.isLetter || $0.isNumber || $0 == " " }
+        return allowed.split(separator: " ").joined(separator: " ")
     }
 }
 
 
+// MARK: - Log actual time sheet
+
+private struct LogActualSheet: View {
+    let title: String
+    let plannedMinutes: Int
+    @Binding var actualMinutes: Int
+    let onSave: () -> Void
+    let onCancel: () -> Void
+
+    private let presets: [Int] = [10, 15, 20, 30, 45, 60, 90, 120]
+
+    var body: some View {
+        ZStack {
+            PastelBGView()
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("Log time")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Palette.textPrimary)
+
+                    Spacer()
+
+                    Button("Close") { onCancel() }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Palette.accent)
+                }
+
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(Palette.textPrimary)
+
+                Text("Planned: \(formatMinutes(plannedMinutes))")
+                    .font(.subheadline)
+                    .foregroundStyle(Palette.textSecondary)
+
+                HStack(spacing: 10) {
+                    Text("Actual")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Palette.textPrimary)
+
+                    Spacer()
+
+                    Stepper("", value: $actualMinutes, in: 1...480, step: 5)
+                        .labelsHidden()
+
+                    Text("\(actualMinutes)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Palette.textPrimary)
+                        .frame(width: 54, alignment: .trailing)
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .background(Palette.card)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Palette.stroke, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Quick picks")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Palette.textPrimary)
+
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 10) {
+                            ForEach(presets, id: \.self) { p in
+                                Button { actualMinutes = p } label: {
+                                    Text("\(p)")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(Palette.textPrimary)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 10)
+                                        .background(Palette.chip)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 14)
+                                                .stroke(Palette.strokeSoft, lineWidth: 1)
+                                        )
+                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .scrollIndicators(.hidden)
+                }
+
+                Button { onSave() } label: {
+                    HStack {
+                        Spacer()
+                        Label("Save", systemImage: "checkmark")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.vertical, 12)
+                    .background(Palette.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
+
+                Text("After a few logs, we’ll suggest better block lengths.")
+                    .font(.caption)
+                    .foregroundStyle(Palette.textTertiary)
+
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+        }
+    }
+
+    private func formatMinutes(_ mins: Int) -> String {
+        let m = max(0, mins)
+        let h = m / 60
+        let r = m % 60
+        if h == 0 { return "\(r) min" }
+        if r == 0 { return "\(h) hr" }
+        return "\(h) hr \(r) min"
+    }
+}
 // MARK: - Late adjust sheet (free/manual)
 
 private struct LateAdjustSheet: View {
@@ -834,5 +1225,13 @@ private struct LateAdjustSheet: View {
             }
             .padding(16)
         }
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    NavigationStack {
+        TimeBlockingView(initialDate: .now)
     }
 }

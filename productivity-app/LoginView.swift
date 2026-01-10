@@ -50,8 +50,8 @@ struct LoginView: View {
                     
                     // Title block
                     VStack(spacing: 10) {
-                        Text("Smart Schedule")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                        Text("Mel")
+                            .font(.system(size: 75, weight: .bold, design: .rounded))
                             .foregroundStyle(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
