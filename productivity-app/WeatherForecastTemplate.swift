@@ -43,9 +43,17 @@ struct HomePage: View {
             }
             .buttonStyle(.plain)
 
-        case "Time Block":
+        case "Time\u{00A0}Block":
             NavigationLink {
                 TimeBlockingView()
+            } label: {
+                QuickLinkButton(link: link)
+            }
+            .buttonStyle(.plain)
+
+        case "Calendar":
+            NavigationLink {
+                CalendarView()
             } label: {
                 QuickLinkButton(link: link)
             }
@@ -97,6 +105,14 @@ struct HomePage: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+        } else if item.title == "Schedule" {
+            NavigationLink {
+                CalendarView()
+            } label: {
+                OverviewRow(item: item)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         } else {
             OverviewRow(item: item)
         }
@@ -117,8 +133,8 @@ struct HomePage: View {
 
                         LazyVGrid(
                             columns: [
-                                GridItem(.flexible(), spacing: 14),
-                                GridItem(.flexible(), spacing: 14)
+                                GridItem(.flexible(minimum: 160), spacing: 14),
+                                GridItem(.flexible(minimum: 160), spacing: 14)
                             ],
                             spacing: 14
                         ) {
@@ -229,11 +245,16 @@ struct HomeHeaderCard: View {
 
                 Spacer()
 
-                VStack(alignment: .trailing, spacing: 10) {
-                    Text("+12")
-                        .font(.system(size: 40, weight: .bold, design: .rounded))
+                VStack(alignment: .trailing, spacing: 6) {
+                    Image(systemName: "cloud.sun.fill")
+                        .font(.system(size: 28))
                         .foregroundColor(.white)
-                    Text("Focus pts")
+
+                    Text("72°")
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+
+                    Text("Partly Cloudy")
                         .font(.subheadline)
                         .foregroundColor(.white.opacity(0.85))
                 }
@@ -254,7 +275,8 @@ struct QuickLink: Identifiable {
 
 let quickLinks: [QuickLink] = [
     .init(title: "Add Task", subtitle: "Quick capture", icon: "plus.circle.fill"),
-    .init(title: "Time Block", subtitle: "Plan your day", icon: "clock.fill"),
+    .init(title: "Time\u{00A0}Block", subtitle: "Plan your day", icon: "clock.fill"),
+    .init(title: "Calendar", subtitle: "See your month", icon: "calendar"),
     .init(title: "Pomodoro", subtitle: "Focus timer", icon: "timer"),
     .init(title: "Reminders", subtitle: "Don’t forget", icon: "bell.fill"),
     .init(title: "Notes", subtitle: "In-context", icon: "note.text"),
@@ -266,10 +288,10 @@ struct QuickLinkButton: View {
     let link: QuickLink
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.white.opacity(0.65))
+                    .fill(Color.white.opacity(0.7))
 
                 Image(systemName: link.icon)
                     .font(.system(size: 18, weight: .semibold))
@@ -281,20 +303,46 @@ struct QuickLinkButton: View {
                 Text(link.title)
                     .font(.headline)
                     .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .multilineTextAlignment(.leading)
 
                 Text(link.subtitle)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                    .multilineTextAlignment(.leading)
             }
+            .fixedSize(horizontal: false, vertical: true)
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 12)
+        .frame(height: 74)
         .padding(.horizontal, 14)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.systemBackground).opacity(0.7))
+                .fill(Color(.systemBackground).opacity(0.75))
         )
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color(red: 0.76, green: 0.70, blue: 0.95).opacity(0.25),
+                            Color(red: 0.93, green: 0.62, blue: 0.82).opacity(0.25)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .blur(radius: 8)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
+        )
+        .shadow(color: Color(red: 0.76, green: 0.70, blue: 0.95).opacity(0.25), radius: 10, x: 0, y: 4)
     }
 }
 
