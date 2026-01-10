@@ -93,7 +93,7 @@ struct CalendarView: View {
         // A few days scattered around "now" so month view shows dots.
         make(0, 9, 0, 10, 30, "Deep work", .focus)
         make(0, 11, 0, 12, 15, "Class", .event)
-        make(0, 15, 0, 15, 45, "Errands", .task)
+        make(0, 19, 0, 19, 30, "Meeting", .event)
         make(1, 10, 0, 10, 30, "Call w/ Maya", .event)
         make(2, 8, 30, 9, 0, "Drink water", .reminder)
         make(3, 13, 0, 14, 0, "Gym", .event)
@@ -271,7 +271,7 @@ struct CalendarView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppTheme.highlight)
 
-                    Text("No items yet — this will populate once your backend is wired.")
+                    Text("Example Task")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(AppTheme.textSecondary)
                 }

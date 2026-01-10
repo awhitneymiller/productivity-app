@@ -243,21 +243,42 @@ struct PomodoroTimerView: View {
                 Image(systemName: "sparkles")
                     .foregroundStyle(Palette.accent)
 
-                Text("Soon: AI will adjust your schedule if a focus block runs long.")
+                Text("Tasks to Do:")
                     .font(.subheadline)
                     .foregroundStyle(Palette.textSecondary)
                     .lineLimit(2)
             }
+            
 
             HStack(spacing: 10) {
-                Image(systemName: "bell.badge")
+                Image(systemName: "inset.filled.square.dashed")
                     .foregroundStyle(Palette.mutedYellow)
 
-                Text("Later we can add notifications + Live Activity.")
+                Text("Finish my Algos Assignment")
                     .font(.subheadline)
                     .foregroundStyle(Palette.textSecondary)
                     .lineLimit(2)
             }
+            HStack(spacing: 10) {
+                Image(systemName: "square.dashed")
+                    .foregroundStyle(Palette.mutedYellow)
+
+                Text("Study for Linear Algebra")
+                    .font(.subheadline)
+                    .foregroundStyle(Palette.textSecondary)
+                    .lineLimit(2)
+            }
+            HStack(spacing: 10) {
+                Image(systemName: "square.dashed")
+                    .foregroundStyle(Palette.mutedYellow)
+
+                Text("Cry")
+                    .font(.subheadline)
+                    .foregroundStyle(Palette.textSecondary)
+                    .lineLimit(2)
+            }
+
+
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 12)
