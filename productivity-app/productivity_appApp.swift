@@ -9,9 +9,12 @@ import SwiftUI
 
 @main
 struct productivity_appApp: App {
+    @StateObject private var auth = AuthManager()
+
     var body: some Scene {
         WindowGroup {
             AppRootView()
+                .environmentObject(auth)
         }
     }
 }

@@ -14,7 +14,7 @@ import SwiftUI
 /// - Main tabs (Home, Add, Time Blocking, Reminders, Focus)
 struct AppRootView: View {
     @AppStorage("didCompleteOnboarding") private var didCompleteOnboarding: Bool = false
-    @AppStorage("isLoggedIn") private var isLoggedIn: Bool = false
+    @EnvironmentObject private var auth: AuthManager
 
     var body: some View {
         ZStack {
@@ -24,14 +24,12 @@ struct AppRootView: View {
                 OnboardingContainer {
                     didCompleteOnboarding = true
                 }
-            } else if !isLoggedIn {
-                LoginContainer {
-                    isLoggedIn = true
-                }
+            } else if !auth.isAuthenticated {
+                LoginContainer()
             } else {
-                MainTabShell(
-                    onSignOut: { isLoggedIn = false }
-                )
+                MainTabShell(onSignOut: {
+                    auth.signOut()
+                })
             }
         }
     }
@@ -110,27 +108,9 @@ struct OnboardingContainer: View {
 // MARK: - Login
 
 struct LoginContainer: View {
-    let onLogin: () -> Void
-
     var body: some View {
         NavigationStack {
-            VStack(spacing: 18) {
-                LoginView()
-
-                Button(action: onLogin) {
-                    Text("Continue")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(Color(red: 0.62, green: 0.65, blue: 0.96))
-                        )
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 12)
-            }
+            LoginView()
         }
     }
 }
@@ -230,4 +210,9 @@ struct ContentView: View {
     var body: some View {
         AppRootView()
     }
+}
+
+#Preview {
+    ContentView()
+        .environmentObject(AuthManager())
 }

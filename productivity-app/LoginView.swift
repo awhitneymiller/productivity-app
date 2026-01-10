@@ -25,6 +25,7 @@ struct LoginView: View {
     
     @State private var isSubmitting: Bool = false
     @State private var errorMessage: String? = nil
+    @State private var showErrorAlert: Bool = false
     
     var body: some View {
         GeometryReader { geo in
@@ -110,7 +111,7 @@ struct LoginView: View {
                                     .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled(true)
                                     .keyboardType(.emailAddress)
-                                    .textContentType(.emailAddress)
+                                    .textContentType(.username)
                             }
                             .padding(.vertical, 12)
                             .padding(.horizontal, 14)
@@ -128,7 +129,8 @@ struct LoginView: View {
                                     .frame(width: 22)
                                 
                                 SecureField("Password", text: $password)
-                                    .textContentType(authMode == .signUp ? .newPassword : .password)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled(true)
                             }
                             .padding(.vertical, 12)
                             .padding(.horizontal, 14)
@@ -147,7 +149,8 @@ struct LoginView: View {
                                         .frame(width: 22)
                                     
                                     SecureField("Confirm password", text: $confirmPassword)
-                                        .textContentType(.newPassword)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled(true)
                                 }
                                 .padding(.vertical, 12)
                                 .padding(.horizontal, 14)
@@ -247,6 +250,11 @@ struct LoginView: View {
                     Spacer(minLength: 26)
                 }
                 .frame(width: geo.size.width)
+                .alert("Sign in failed", isPresented: $showErrorAlert) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text(errorMessage ?? "Something went wrong.")
+                }
             }
         }
     }
@@ -332,59 +340,98 @@ struct LoginView: View {
     struct UserDTO: Decodable {
         let id: Int
         let email: String
+
+        init(id: Int, email: String) {
+            self.id = id
+            self.email = email
+        }
     }
     
     private func submitEmailAuth() {
         errorMessage = nil
-        
-        guard isEmailLikelyValid else { errorMessage = "Please enter a valid email."; return }
-        guard isPasswordLikelyValid else { errorMessage = "Password must be at least 6 characters."; return }
-        if authMode == .signUp, confirmPassword != password {
-            errorMessage = "Passwords do not match."
+        showErrorAlert = false
+
+        guard isEmailLikelyValid else {
+            errorMessage = "Please enter a valid email."
+            showErrorAlert = true
             return
         }
-        
+        guard isPasswordLikelyValid else {
+            errorMessage = "Password must be at least 6 characters."
+            showErrorAlert = true
+            return
+        }
+        if authMode == .signUp, confirmPassword != password {
+            errorMessage = "Passwords do not match."
+            showErrorAlert = true
+            return
+        }
+
         isSubmitting = true
-        
+
         Task {
             do {
+                defer {
+                    Task { @MainActor in
+                        isSubmitting = false
+                    }
+                }
                 let endpoint = authMode == .signUp ? "/api/auth/register" : "/api/auth/login"
-                let url = URL(string: "http://localhost:5000\(endpoint)")!
-                
+                let url = URL(string: "http://127.0.0.1:5000\(endpoint)")!
+
                 var req = URLRequest(url: url)
                 req.httpMethod = "POST"
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                
+
                 let payload: [String: Any] = [
                     "email": trimmedEmail,
                     "password": password
                 ]
                 req.httpBody = try JSONSerialization.data(withJSONObject: payload)
-                
+
                 let (data, resp) = try await URLSession.shared.data(for: req)
                 let http = resp as? HTTPURLResponse
-                
+
                 guard let http else { throw URLError(.badServerResponse) }
-                
+
                 if !(200..<300).contains(http.statusCode) {
                     let msg = String(data: data, encoding: .utf8) ?? "Request failed"
                     throw NSError(domain: "API", code: http.statusCode,
                                   userInfo: [NSLocalizedDescriptionKey: msg])
                 }
-                
-                let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
-                
+
+                let decoded: AuthResponse
+                do {
+                    decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
+                } catch {
+                    // Fallback for slightly different API shapes
+                    let obj = try JSONSerialization.jsonObject(with: data)
+                    guard let dict = obj as? [String: Any] else { throw error }
+                    let token = (dict["access_token"] as? String)
+                        ?? (dict["token"] as? String)
+                        ?? ""
+                    let userDict = dict["user"] as? [String: Any]
+                    let emailVal = (userDict?["email"] as? String)
+                        ?? (dict["email"] as? String)
+                        ?? trimmedEmail
+                    decoded = AuthResponse(access_token: token, user: UserDTO(id: 0, email: emailVal))
+                }
+
+                guard !decoded.access_token.isEmpty else {
+                    throw NSError(domain: "API", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing access token in response."])
+                }
+
                 // Persist token securely and update global session state
                 KeychainStore.save(decoded.access_token, forKey: "access_token")
                 await MainActor.run {
                     auth.signIn(accessToken: decoded.access_token, email: decoded.user.email)
-                    isSubmitting = false
                     errorMessage = nil
+                    showErrorAlert = false
                 }
             } catch {
                 await MainActor.run {
-                    isSubmitting = false
                     errorMessage = error.localizedDescription
+                    showErrorAlert = true
                 }
             }
         }
