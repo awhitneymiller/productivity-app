@@ -10,12 +10,16 @@ import SwiftUI
 // MARK: - Time Blocking (UI only / placeholders)
 
 struct TimeBlockingView: View {
-    @State private var selectedDate: Date = .now
+    @State private var selectedDate: Date
     @State private var autoShiftEnabled: Bool = true
     @State private var showingAddBlock: Bool = false
     @State private var showingLateSheet: Bool = false
     @State private var lastShiftMinutes: Int = 0
     @State private var preShiftBlocks: [TimeBlock] = []
+
+    init(initialDate: Date = .now) {
+        _selectedDate = State(initialValue: initialDate)
+    }
 
     // Placeholder blocks (we'll wire real data later)
     @State private var blocks: [TimeBlock] = [
@@ -717,7 +721,7 @@ private enum Palette {
 
 #Preview {
     NavigationStack {
-        TimeBlockingView()
+        TimeBlockingView(initialDate: .now)
     }
 }
 

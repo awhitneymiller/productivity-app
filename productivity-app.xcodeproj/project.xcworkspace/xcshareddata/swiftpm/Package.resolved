@@ -1,5 +1,5 @@
 {
-  "originHash" : "d526b956b2941e51520eb1a181d281939054defb03feb9302533a12952391e2e",
+  "originHash" : "d8b0a634453c4478dcc9558738b71e7b76df3a77e126b41187a11ad14bc3339f",
   "pins" : [
     {
       "identity" : "fluidaudio",
@@ -8,6 +8,15 @@
       "state" : {
         "branch" : "main",
         "revision" : "73f070adfbf6e4b22d824fbd88577003dc8cc988"
+      }
+    },
+    {
+      "identity" : "horizoncalendar",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/airbnb/HorizonCalendar.git",
+      "state" : {
+        "branch" : "master",
+        "revision" : "9ad043fd3f44841ea40f4409fd835a2650762f31"
       }
     }
   ],

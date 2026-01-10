@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Security
 
 struct LoginView: View {
     @EnvironmentObject private var auth: AuthManager
@@ -111,7 +110,7 @@ struct LoginView: View {
                                     .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled(true)
                                     .keyboardType(.emailAddress)
-                                    .textContentType(.username)
+                                    .textContentType(.none)
                             }
                             .padding(.vertical, 12)
                             .padding(.horizontal, 14)
@@ -131,6 +130,7 @@ struct LoginView: View {
                                 SecureField("Password", text: $password)
                                     .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled(true)
+                                    .textContentType(.none)
                             }
                             .padding(.vertical, 12)
                             .padding(.horizontal, 14)
@@ -151,6 +151,7 @@ struct LoginView: View {
                                     SecureField("Confirm password", text: $confirmPassword)
                                         .textInputAutocapitalization(.never)
                                         .autocorrectionDisabled(true)
+                                        .textContentType(.none)
                                 }
                                 .padding(.vertical, 12)
                                 .padding(.horizontal, 14)
@@ -422,7 +423,6 @@ struct LoginView: View {
                 }
 
                 // Persist token securely and update global session state
-                KeychainStore.save(decoded.access_token, forKey: "access_token")
                 await MainActor.run {
                     auth.signIn(accessToken: decoded.access_token, email: decoded.user.email)
                     errorMessage = nil
@@ -446,77 +446,25 @@ final class AuthManager: ObservableObject {
     @Published private(set) var email: String? = nil
 
     init() {
-        // Restore session if a token exists
-        let token = KeychainStore.load(forKey: "access_token")
-        if let token, !token.isEmpty {
-            self.accessToken = token
-            self.isAuthenticated = true
-        }
+        // Keychain disabled for simulator/dev convenience
+        self.isAuthenticated = false
+        self.accessToken = nil
+        self.email = nil
     }
 
     func signIn(accessToken: String, email: String) {
         self.accessToken = accessToken
         self.email = email
         self.isAuthenticated = true
-        KeychainStore.save(accessToken, forKey: "access_token")
     }
 
     func signOut() {
         self.isAuthenticated = false
         self.accessToken = nil
         self.email = nil
-        KeychainStore.delete(forKey: "access_token")
     }
 }
 
-struct KeychainStore {
-    static func save(_ value: String, forKey key: String) {
-        guard let data = value.data(using: .utf8) else { return }
-
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key
-        ]
-
-        // Replace existing
-        SecItemDelete(query as CFDictionary)
-
-        let add: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-        ]
-
-        SecItemAdd(add as CFDictionary, nil)
-    }
-
-    static func load(forKey key: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess,
-              let data = item as? Data,
-              let str = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        return str
-    }
-
-    static func delete(forKey key: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrAccount as String: key
-        ]
-        SecItemDelete(query as CFDictionary)
-    }
-}
 
 
 struct AuthenticatedRootView: View {

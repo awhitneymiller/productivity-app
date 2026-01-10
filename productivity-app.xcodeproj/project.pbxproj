@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0705B4352F12C47000E45796 /* HorizonCalendar in Frameworks */ = {isa = PBXBuildFile; productRef = 0705B4342F12C47000E45796 /* HorizonCalendar */; };
 		07120F892F118C16007599CD /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = 07120F882F118C16007599CD /* FluidAudio */; };
 /* End PBXBuildFile section */
 
@@ -56,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0705B4352F12C47000E45796 /* HorizonCalendar in Frameworks */,
 				07120F892F118C16007599CD /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -118,6 +120,7 @@
 			name = "productivity-app";
 			packageProductDependencies = (
 				07120F882F118C16007599CD /* FluidAudio */,
+				0705B4342F12C47000E45796 /* HorizonCalendar */,
 			);
 			productName = "productivity-app";
 			productReference = 07FF56732F103A7B0097DBBA /* productivity-app.app */;
@@ -203,6 +206,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				07120F872F118C16007599CD /* XCRemoteSwiftPackageReference "FluidAudio" */,
+				0705B4332F12C47000E45796 /* XCRemoteSwiftPackageReference "HorizonCalendar" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 07FF56742F103A7B0097DBBA /* Products */;
@@ -563,6 +567,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		0705B4332F12C47000E45796 /* XCRemoteSwiftPackageReference "HorizonCalendar" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/HorizonCalendar.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
 		07120F872F118C16007599CD /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/FluidInference/FluidAudio.git";
@@ -574,6 +586,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0705B4342F12C47000E45796 /* HorizonCalendar */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0705B4332F12C47000E45796 /* XCRemoteSwiftPackageReference "HorizonCalendar" */;
+			productName = HorizonCalendar;
+		};
 		07120F882F118C16007599CD /* FluidAudio */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 07120F872F118C16007599CD /* XCRemoteSwiftPackageReference "FluidAudio" */;
