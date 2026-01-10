@@ -7,6 +7,43 @@
 
 import SwiftUI
 
+// MARK: - API DTOs
+
+
+struct CreateTaskResponse: Decodable {
+    let message: String
+    let task: TaskDTO
+}
+
+struct TaskDTO: Decodable {
+    let id: Int
+    let title: String
+    let due_date: String
+    let due_at: String?
+    let duration_minutes: Int
+    let priority: String
+    let reminder_offset_minutes: Int?
+    let tags: String?
+    let notes: String?
+}
+
+enum APIError: LocalizedError {
+    case missingToken
+    case badURL
+    case serverError(status: Int, message: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingToken:
+            return "Missing access token. Please sign in again."
+        case .badURL:
+            return "Bad server URL."
+        case .serverError(_, let message):
+            return message.isEmpty ? "Request failed." : message
+        }
+    }
+}
+
 struct AddTaskPage: View {
     // MARK: - Modes
     enum InputMode: String, CaseIterable, Identifiable {
@@ -14,6 +51,8 @@ struct AddTaskPage: View {
         case manual = "Manual"
         var id: String { rawValue }
     }
+    
+    @EnvironmentObject private var auth: AuthManager
 
     @Environment(\.dismiss) private var dismiss
 
@@ -43,6 +82,10 @@ struct AddTaskPage: View {
     @State private var reminderMinutesBefore: Int = 15
     @State private var tagText: String = ""
 
+    // MARK: - Networking state
+    @State private var isSaving: Bool = false
+    @State private var saveError: String? = nil
+
     var body: some View {
         NavigationStack {
             GeometryReader { geo in
@@ -68,6 +111,13 @@ struct AddTaskPage: View {
 
                             actionButtons
 
+                            if let saveError {
+                                Text(saveError)
+                                    .font(.footnote)
+                                    .foregroundColor(.red)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
                             Spacer(minLength: 18)
                         }
                         .padding(.horizontal, 16)
@@ -82,6 +132,10 @@ struct AddTaskPage: View {
                     Button("Close") { dismiss() }
                 }
             }
+        }
+        .onChange(of: hasTime) { newValue in
+            // Don’t allow reminders if time is off (backend will reject it)
+            if !newValue { addReminder = false }
         }
     }
 
@@ -188,7 +242,6 @@ struct AddTaskPage: View {
                     .onChange(of: voiceTranscriber.transcript) {
                         let trimmed = voiceTranscriber.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmed.isEmpty else { return }
-                        // Only overwrite when recording has stopped (so we don’t fight the live UI while speaking)
                         guard !voiceTranscriber.isRecording else { return }
                         naturalInput = trimmed
                         didRunAI = false
@@ -205,7 +258,6 @@ struct AddTaskPage: View {
 
             HStack(spacing: 10) {
                 Button {
-                    // Placeholder: clear
                     naturalInput = ""
                     voiceTranscriber.transcript = ""
                     didRunAI = false
@@ -221,7 +273,6 @@ struct AddTaskPage: View {
                     didRunAI = true
                     parsedTitle = guessTitle(from: naturalInput)
                     parsedExtras = guessExtras(from: naturalInput)
-                    // Very light placeholder date/time/reminder detection
                     parsedDate = naturalInput.lowercased().contains("tomorrow") ? "Tomorrow" : (naturalInput.lowercased().contains("today") ? "Today" : "")
                     parsedTime = (naturalInput.lowercased().contains(" at ") ? "" : parsedTime)
                     parsedReminder = naturalInput.lowercased().contains("remind") ? (parsedReminder.isEmpty ? "15 min before" : parsedReminder) : ""
@@ -279,7 +330,7 @@ struct AddTaskPage: View {
                     }
                 }
 
-                Text("You’ll be able to edit anything before saving.")
+                Text("AI preview isn’t wired to save yet — switch to Manual to save.")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .padding(.top, 2)
@@ -290,7 +341,6 @@ struct AddTaskPage: View {
         .overlay(glassStroke)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
-
 
     private var manualCard: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -333,11 +383,9 @@ struct AddTaskPage: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.secondary)
 
-                HStack {
-                    Stepper(value: $durationMinutes, in: 5...240, step: 5) {
-                        Text("\(durationMinutes) min")
-                            .font(.subheadline)
-                    }
+                Stepper(value: $durationMinutes, in: 5...240, step: 5) {
+                    Text("\(durationMinutes) min")
+                        .font(.subheadline)
                 }
             }
 
@@ -348,9 +396,7 @@ struct AddTaskPage: View {
 
                 HStack(spacing: 10) {
                     ForEach(Priority.allCases) { p in
-                        Button {
-                            priority = p
-                        } label: {
+                        Button { priority = p } label: {
                             Text(p.title)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundColor(priority == p ? .white : Color(red: 0.39, green: 0.28, blue: 0.60))
@@ -407,15 +453,19 @@ struct AddTaskPage: View {
     private var actionButtons: some View {
         VStack(spacing: 10) {
             Button {
-                // Placeholder: save later
+                Task { await saveManualTask() }
             } label: {
-                Text("Save")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                HStack(spacing: 10) {
+                    if isSaving { ProgressView().tint(.white) }
+                    Text(isSaving ? "Saving..." : "Save")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
             }
             .buttonStyle(PrimaryPillButtonStyle())
+            .disabled(isSaving)
 
             Button {
                 // Placeholder: create as time block later
@@ -502,13 +552,107 @@ struct AddTaskPage: View {
         }
     }
 
+    // MARK: - Networking
+
+    private func saveManualTask() async {
+        await MainActor.run {
+            saveError = nil
+            isSaving = true
+        }
+
+        do {
+            // Only allow saving from Manual mode for now
+            guard mode == .manual else {
+                throw APIError.serverError(status: 0, message: "Switch to Manual to save for now.")
+            }
+
+            guard let token = auth.accessToken, !token.isEmpty else { throw APIError.missingToken }
+
+            guard let url = URL(string: "http://127.0.0.1:8080/api/create/task") else {
+                throw APIError.badURL
+            }
+
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            // Required fields
+            let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedTitle.isEmpty {
+                throw APIError.serverError(status: 400, message: "Title is required.")
+            }
+
+            // Formatters to match Flask parsing
+            let dateFormatter = DateFormatter()
+            dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+            dateFormatter.timeZone = TimeZone.current
+            dateFormatter.dateFormat = "yyyy-MM-dd"
+
+            let timeFormatter = DateFormatter()
+            timeFormatter.locale = Locale(identifier: "en_US_POSIX")
+            timeFormatter.timeZone = TimeZone.current
+            timeFormatter.dateFormat = "HH:mm"
+
+            var payload: [String: Any] = [
+                "title": trimmedTitle,
+                "due_date": dateFormatter.string(from: date),
+                "duration_minutes": durationMinutes,
+                "priority": priority.rawValue
+            ]
+
+            // Optional time
+            if hasTime {
+                payload["due_time"] = timeFormatter.string(from: time)
+
+                // Optional reminder (your Flask code currently expects "reminder_minutes")
+                if addReminder {
+                    payload["reminder_minutes"] = reminderMinutesBefore
+                    // If you change Flask to use reminder_offset_minutes, use:
+                    // payload["reminder_offset_minutes"] = reminderMinutesBefore
+                }
+            }
+
+            // Optional tags/notes
+            let tags = tagText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !tags.isEmpty { payload["tags"] = tags }
+
+            let n = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !n.isEmpty { payload["notes"] = n }
+
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
+
+            let (data, resp) = try await URLSession.shared.data(for: req)
+            guard let http = resp as? HTTPURLResponse else {
+                throw APIError.serverError(status: 0, message: "No server response.")
+            }
+
+            if !(200..<300).contains(http.statusCode) {
+                let serverText = String(data: data, encoding: .utf8) ?? ""
+                throw APIError.serverError(status: http.statusCode, message: serverText)
+            }
+
+            // Optional: decode response to confirm shape
+            _ = try? JSONDecoder().decode(CreateTaskResponse.self, from: data)
+
+            await MainActor.run {
+                isSaving = false
+                dismiss()
+            }
+        } catch {
+            await MainActor.run {
+                isSaving = false
+                saveError = error.localizedDescription
+            }
+        }
+    }
+
     // MARK: - Tiny placeholder “AI” helpers
 
     private func guessTitle(from text: String) -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return "New task" }
 
-        // Cut at common separators
         let lower = trimmed.lowercased()
         if let r = lower.range(of: ",") {
             let head = String(trimmed[..<r.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -518,20 +662,17 @@ struct AddTaskPage: View {
             let head = String(trimmed[..<r.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
             return head.isEmpty ? trimmed : head
         }
-
         return trimmed
     }
 
     private func guessExtras(from text: String) -> [String] {
         let lower = text.lowercased()
         var extras: [String] = []
-
         if lower.contains("charger") { extras.append("Bring charger") }
         if lower.contains("keys") { extras.append("Grab keys") }
         if lower.contains("wallet") { extras.append("Bring wallet") }
         if lower.contains("laptop") { extras.append("Bring laptop") }
         if lower.contains("water") || lower.contains("bottle") { extras.append("Bring water") }
-
         return Array(Set(extras)).sorted()
     }
 }
@@ -625,7 +766,6 @@ struct FlexibleView<Data: Collection, Content: View>: View where Data.Element: H
         var currentWidth: CGFloat = 0
 
         for item in data {
-            // estimate chip width based on text length
             let estimated = CGFloat(String(describing: item).count) * 8.0 + 34.0
             if currentWidth + estimated + spacing > width, !currentRow.isEmpty {
                 rows.append(currentRow)
@@ -650,7 +790,6 @@ struct FlexibleView<Data: Collection, Content: View>: View where Data.Element: H
         }
     }
 }
-
 
 #Preview {
     AddTaskPage()
