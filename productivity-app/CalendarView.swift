@@ -20,7 +20,7 @@ struct CalendarView: View {
 
     private let visibleDateRange: ClosedRange<Date>
 
-    @State private var selectedDate: Date? = nil
+    @State private var selectedDate: Date?
 
     // MARK: - Placeholder planned items (swap with backend later)
 
@@ -75,16 +75,20 @@ struct CalendarView: View {
     @State private var demoItems: [PlannedItem] = []
 
     init() {
-        let now = Date()
-        let start = Calendar.current.date(byAdding: .month, value: -6, to: now) ?? now
-        let end = Calendar.current.date(byAdding: .month, value: 18, to: now) ?? now
+        // Anchor the initial view around January 2026 (so the calendar opens there by default).
+        let cal = Calendar.current
+        let anchor = cal.date(from: DateComponents(year: 2026, month: 1, day: 15)) ?? Date()
+
+        let start = cal.date(byAdding: .month, value: -6, to: anchor) ?? anchor
+        let end = cal.date(byAdding: .month, value: 18, to: anchor) ?? anchor
         self.visibleDateRange = start...end
+
+        _selectedDate = State(initialValue: anchor)
 
         // Demo items (remove when backend is ready)
         var tmp: [PlannedItem] = []
-        let cal = Calendar.current
         func make(_ dayOffset: Int, _ sh: Int, _ sm: Int, _ eh: Int, _ em: Int, _ title: String, _ type: PlannedItemType) {
-            guard let d = cal.date(byAdding: .day, value: dayOffset, to: now) else { return }
+            guard let d = cal.date(byAdding: .day, value: dayOffset, to: anchor) else { return }
             let startDate = cal.date(bySettingHour: sh, minute: sm, second: 0, of: d) ?? d
             let endDate = cal.date(bySettingHour: eh, minute: em, second: 0, of: d) ?? d
             tmp.append(PlannedItem(title: title, start: startDate, end: endDate, type: type))
