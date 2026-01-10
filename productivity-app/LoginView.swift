@@ -377,7 +377,7 @@ struct LoginView: View {
                     }
                 }
                 let endpoint = authMode == .signUp ? "/api/auth/register" : "/api/auth/login"
-                let url = URL(string: "http://127.0.0.1:5000\(endpoint)")!
+                let url = URL(string: "http://127.0.0.1:8080\(endpoint)")!
 
                 var req = URLRequest(url: url)
                 req.httpMethod = "POST"
