@@ -7,10 +7,11 @@
 
 import SwiftUI
 
+// MARK: - View
 struct LoginView: View {
     @EnvironmentObject private var auth: AuthManager
     
-    // MARK: - Email auth (Firebase wiring later)
+    // MARK: - Email auth modes
     enum EmailAuthMode: String, CaseIterable, Identifiable {
         case signIn = "Sign In"
         case signUp = "Create Account"
@@ -292,7 +293,7 @@ struct LoginView: View {
         }
     }
     
-    // MARK: - Pieces
+    // MARK: - Visual Components
     
     private func accentBlobs(in size: CGSize) -> some View {
         ZStack {
@@ -343,13 +344,11 @@ struct LoginView: View {
         )
     }
     
-    
-    // MARK: - Validation + Mock submit
+    // MARK: - Validation & Networking
     
     private var trimmedEmail: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
     
     private var isEmailLikelyValid: Bool {
-        // Simple check for now; Firebase will validate for real
         trimmedEmail.contains("@") && trimmedEmail.contains(".") && trimmedEmail.count >= 5
     }
     
@@ -373,7 +372,7 @@ struct LoginView: View {
     struct UserDTO: Decodable {
         let id: Int
         let email: String
-
+        
         init(id: Int, email: String) {
             self.id = id
             self.email = email
@@ -383,7 +382,7 @@ struct LoginView: View {
     private func submitEmailAuth() {
         errorMessage = nil
         showErrorAlert = false
-
+        
         guard isEmailLikelyValid else {
             errorMessage = "Please enter a valid email."
             showErrorAlert = true
@@ -399,9 +398,9 @@ struct LoginView: View {
             showErrorAlert = true
             return
         }
-
+        
         isSubmitting = true
-
+        
         Task {
             do {
                 defer {
@@ -409,58 +408,71 @@ struct LoginView: View {
                         isSubmitting = false
                     }
                 }
+                
+                // --- FIX: Using Port 5001 to avoid AirPlay (5000) and Proxy (8080) issues ---
                 let endpoint = authMode == .signUp ? "/api/auth/register" : "/api/auth/login"
-                let url = URL(string: "http://127.0.0.1:8080\(endpoint)")!
-
+                guard let url = URL(string: "http://127.0.0.1:5001\(endpoint)") else {
+                    throw URLError(.badURL)
+                }
+                
                 var req = URLRequest(url: url)
                 req.httpMethod = "POST"
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
+                
                 let payload: [String: Any] = [
                     "email": trimmedEmail,
                     "password": password
                 ]
                 req.httpBody = try JSONSerialization.data(withJSONObject: payload)
-
+                
                 let (data, resp) = try await URLSession.shared.data(for: req)
-                let http = resp as? HTTPURLResponse
-
-                guard let http else { throw URLError(.badServerResponse) }
-
+                
+                guard let http = resp as? HTTPURLResponse else {
+                    throw URLError(.badServerResponse)
+                }
+                
                 if !(200..<300).contains(http.statusCode) {
                     let msg = String(data: data, encoding: .utf8) ?? "Request failed"
                     throw NSError(domain: "API", code: http.statusCode,
                                   userInfo: [NSLocalizedDescriptionKey: msg])
                 }
-
+                
+                // Parse Response
                 let decoded: AuthResponse
                 do {
                     decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
                 } catch {
-                    // Fallback for slightly different API shapes
+                    // Fallback for loose JSON structures
                     let obj = try JSONSerialization.jsonObject(with: data)
                     guard let dict = obj as? [String: Any] else { throw error }
+                    
                     let token = (dict["access_token"] as? String)
                         ?? (dict["token"] as? String)
                         ?? ""
+                    
                     let userDict = dict["user"] as? [String: Any]
                     let emailVal = (userDict?["email"] as? String)
                         ?? (dict["email"] as? String)
                         ?? trimmedEmail
-                    decoded = AuthResponse(access_token: token, user: UserDTO(id: 0, email: emailVal))
+                    
+                    let idVal = (userDict?["id"] as? Int) ?? 0
+                    
+                    decoded = AuthResponse(access_token: token, user: UserDTO(id: idVal, email: emailVal))
                 }
-
+                
                 guard !decoded.access_token.isEmpty else {
                     throw NSError(domain: "API", code: -1, userInfo: [NSLocalizedDescriptionKey: "Missing access token in response."])
                 }
-
-                // Persist token securely and update global session state
+                
+                // Success: Persist & Sign In
                 await MainActor.run {
                     auth.signIn(accessToken: decoded.access_token, email: decoded.user.email)
                     errorMessage = nil
                     showErrorAlert = false
                 }
+                
             } catch {
+                print("Login Error: \(error)")
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     showErrorAlert = true
@@ -470,49 +482,63 @@ struct LoginView: View {
     }
 }
 
-// MARK: - Session / Keychain
+// MARK: - Updated AuthManager (Handles Persistence)
+
 @MainActor
 final class AuthManager: ObservableObject {
     @Published private(set) var isAuthenticated: Bool = false
     @Published private(set) var accessToken: String? = nil
     @Published private(set) var email: String? = nil
-
+    
     init() {
-        // Keychain disabled for simulator/dev convenience
-        self.isAuthenticated = false
-        self.accessToken = nil
-        self.email = nil
+        // 1. Auto-login on app launch
+        if let savedToken = UserDefaults.standard.string(forKey: "authToken") {
+            self.accessToken = savedToken
+            self.email = UserDefaults.standard.string(forKey: "userEmail")
+            self.isAuthenticated = true
+            print("🔹 AuthManager: Session restored from UserDefaults")
+        }
     }
-
+    
     func signIn(accessToken: String, email: String) {
+        // 2. Set Memory
         self.accessToken = accessToken
         self.email = email
         self.isAuthenticated = true
+        
+        // 3. Save to Disk
+        UserDefaults.standard.set(accessToken, forKey: "authToken")
+        UserDefaults.standard.set(email, forKey: "userEmail")
+        print("✅ AuthManager: Token saved.")
     }
-
+    
     func signOut() {
+        // 4. Clear Memory
         self.isAuthenticated = false
         self.accessToken = nil
         self.email = nil
+        
+        // 5. Clear Disk
+        UserDefaults.standard.removeObject(forKey: "authToken")
+        UserDefaults.standard.removeObject(forKey: "userEmail")
+        print("🛑 AuthManager: Token removed.")
     }
 }
 
-
-
 struct AuthenticatedRootView: View {
     @EnvironmentObject private var auth: AuthManager
-
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
                 Text("You’re signed in")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
-
+                
                 if let email = auth.email {
                     Text(email)
                         .foregroundColor(.secondary)
                 }
-
+                
                 Button("Sign out") {
                     auth.signOut()
                 }
@@ -526,6 +552,7 @@ struct AuthenticatedRootView: View {
 }
 
 // MARK: - Button Styles
+
 struct PrimaryPillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -569,4 +596,5 @@ struct SecondaryPillButtonStyle: ButtonStyle {
 
 #Preview {
     LoginView()
+        .environmentObject(AuthManager())
 }
