@@ -22,15 +22,8 @@ struct HomePage: View {
 
     @StateObject var focusStore = FocusStatsStore()
     @State private var showLogoutConfirm: Bool = false
+    @State private var animateAppGlow: Bool = false
 
-    private let backgroundGradient = LinearGradient(
-        gradient: Gradient(colors: [
-            Color(red: 0.96, green: 0.94, blue: 0.99),
-            Color(red: 0.92, green: 0.90, blue: 0.98)
-        ]),
-        startPoint: .top,
-        endPoint: .bottom
-    )
 
     @ViewBuilder
     private func quickLinkCell(for link: QuickLink) -> some View {
@@ -122,45 +115,49 @@ struct HomePage: View {
 
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 32) {
-                    HomeHeaderCard()
-                        .padding(.horizontal)
-                        .padding(.top, 16)
+            ZStack {
+                AmbientBackground().ignoresSafeArea()
 
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Quick Links")
-                            .font(.headline)
-                            .padding(.horizontal)
+                ScrollView {
+                    VStack(spacing: 32) {
+                        HomeHeaderCard()
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
 
-                        LazyVGrid(
-                            columns: [
-                                GridItem(.flexible(minimum: 160), spacing: 14),
-                                GridItem(.flexible(minimum: 160), spacing: 14)
-                            ],
-                            spacing: 14
-                        ) {
-                            ForEach(quickLinks) { link in
-                                quickLinkCell(for: link)
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Quick Links")
+                                .font(.headline)
+                                .padding(.horizontal)
+
+                            LazyVGrid(
+                                columns: [
+                                    GridItem(.flexible(minimum: 160), spacing: 14),
+                                    GridItem(.flexible(minimum: 160), spacing: 14)
+                                ],
+                                spacing: 14
+                            ) {
+                                ForEach(quickLinks) { link in
+                                    quickLinkCell(for: link)
+                                }
                             }
+                            .padding(.horizontal, 20)
                         }
-                        .padding(.horizontal)
-                    }
 
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Today's Overview")
-                            .font(.headline)
-                            .padding(.horizontal)
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Today's Overview")
+                                .font(.headline)
+                                .padding(.horizontal)
 
-                        VStack(spacing: 12) {
-                            ForEach(overviewItems) { item in
-                                overviewCell(for: item)
+                            VStack(spacing: 12) {
+                                ForEach(overviewItems) { item in
+                                    overviewCell(for: item)
+                                }
                             }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
                     }
+                    .padding(.bottom, 32)
                 }
-                .padding(.bottom, 32)
             }
             .navigationTitle("Today")
             .toolbar {
@@ -192,14 +189,102 @@ struct HomePage: View {
             } message: {
                 Text("You can log back in any time.")
             }
-            .background(backgroundGradient.ignoresSafeArea())
+            .overlay {
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .inset(by: 10)
+                    .fill(Color.clear)
+                    .brandGlow(
+                        cornerRadius: 34,
+                        lineWidth: 5,
+                        glowBlur: 10,
+                        opacity: 0.55,
+                        angleDegrees: animateAppGlow ? 360 : 0
+                    )
+                    .allowsHitTesting(false)
+            }
+            .onAppear {
+                withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
+                    animateAppGlow = true
+                }
+            }
         }
     }
 }
 
 
+// MARK: - Ambient Background (more interesting, still on-brand)
+struct AmbientBackground: View {
+    @State private var t: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            // Base wash
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.96, green: 0.94, blue: 0.99),
+                    Color(red: 0.92, green: 0.90, blue: 0.98)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            // Soft blobs
+            Circle()
+                .fill(Color(red: 0.93, green: 0.62, blue: 0.82).opacity(0.22))
+                .frame(width: 260, height: 260)
+                .blur(radius: 28)
+                .offset(x: -120 + 40 * cos(t * 0.9), y: -210 + 30 * sin(t * 0.8))
+
+            Circle()
+                .fill(Color(red: 0.60, green: 0.85, blue: 0.98).opacity(0.20))
+                .frame(width: 340, height: 340)
+                .blur(radius: 34)
+                .offset(x: 150 + 35 * sin(t * 0.7), y: -80 + 40 * cos(t * 0.6))
+
+            RoundedRectangle(cornerRadius: 120, style: .continuous)
+                .fill(Color(red: 0.76, green: 0.70, blue: 0.95).opacity(0.18))
+                .frame(width: 420, height: 260)
+                .blur(radius: 40)
+                .rotationEffect(.degrees(-18))
+                .offset(x: -40 + 30 * sin(t * 0.55), y: 260 + 25 * cos(t * 0.5))
+
+            // Subtle grain so it feels less flat
+            GrainOverlay()
+                .opacity(0.08)
+                .blendMode(.overlay)
+        }
+        .onAppear {
+            // Smooth, slow drift (cheap + reliable)
+            withAnimation(.linear(duration: 18).repeatForever(autoreverses: false)) {
+                t = .pi * 2
+            }
+        }
+    }
+}
+
+struct GrainOverlay: View {
+    var body: some View {
+        Canvas { context, size in
+            let dotCount = 700
+            for _ in 0..<dotCount {
+                let x = CGFloat.random(in: 0...size.width)
+                let y = CGFloat.random(in: 0...size.height)
+                let r = CGFloat.random(in: 0.35...1.0)
+                let a = Double.random(in: 0.04...0.10)
+                context.fill(
+                    Path(ellipseIn: CGRect(x: x, y: y, width: r, height: r)),
+                    with: .color(.black.opacity(a))
+                )
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 // MARK: - Header Card
 struct HomeHeaderCard: View {
+    @State private var animateGlow: Bool = false
+
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
@@ -214,6 +299,47 @@ struct HomeHeaderCard: View {
                     )
                 )
                 .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 8)
+
+            // Siri-like glow outline (always on)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(
+                    AngularGradient(
+                        gradient: Gradient(colors: [
+                            Color(red: 0.76, green: 0.70, blue: 0.95),
+                            Color(red: 0.60, green: 0.85, blue: 0.98),
+                            Color(red: 0.93, green: 0.62, blue: 0.82),
+                            Color(red: 0.76, green: 0.70, blue: 0.95)
+                        ]),
+                        center: .center,
+                        angle: .degrees(animateGlow ? 360 : 0)
+                    ),
+                    lineWidth: 5
+                )
+                .blur(radius: 6)
+                .opacity(0.85)
+                .blendMode(.screen)
+
+            // A sharper inner stroke so it still looks crisp
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.white.opacity(0.65),
+                            Color.white.opacity(0.15)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+                .opacity(0.7)
+
+            Image("logotrans")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 160, height: 160)
+                .opacity(0.15)
+                .offset(x: 90, y: -20)
 
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -264,6 +390,12 @@ struct HomeHeaderCard: View {
             .padding(22)
         }
         .frame(height: 170)
+        .brandGlow(cornerRadius: 28, lineWidth: 4.5, glowBlur: 10, opacity: 0.20, angleDegrees: animateGlow ? 360 : 0)
+        .onAppear {
+            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                animateGlow = true
+            }
+        }
     }
 }
 
@@ -345,6 +477,7 @@ struct QuickLinkButton: View {
                 .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
         )
         .shadow(color: Color(red: 0.76, green: 0.70, blue: 0.95).opacity(0.25), radius: 10, x: 0, y: 4)
+        .brandGlow(cornerRadius: 18, lineWidth: 2.5, glowBlur: 6, opacity: 0.35)
     }
 }
 
@@ -399,6 +532,63 @@ struct OverviewRow: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color(.systemBackground).opacity(0.7))
+        )
+        .brandGlow(cornerRadius: 18, lineWidth: 2.5, glowBlur: 6, opacity: 0.30)
+    }
+}
+
+// MARK: - Branding Glow (reusable)
+struct BrandGlowModifier: ViewModifier {
+    var cornerRadius: CGFloat
+    var lineWidth: CGFloat
+    var glowBlur: CGFloat
+    var opacity: Double
+    var angleDegrees: Double
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(
+                        AngularGradient(
+                            gradient: Gradient(colors: [
+                                Color(red: 0.76, green: 0.70, blue: 0.95),
+                                Color(red: 0.60, green: 0.85, blue: 0.98),
+                                Color(red: 0.93, green: 0.62, blue: 0.82),
+                                Color(red: 0.76, green: 0.70, blue: 0.95)
+                            ]),
+                            center: .center,
+                            angle: .degrees(angleDegrees)
+                        ),
+                        lineWidth: lineWidth
+                    )
+                    .blur(radius: glowBlur)
+                    .opacity(opacity)
+                    .blendMode(.screen)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color.white.opacity(0.22), lineWidth: 0.6)
+            )
+    }
+}
+
+extension View {
+    func brandGlow(
+        cornerRadius: CGFloat,
+        lineWidth: CGFloat = 3,
+        glowBlur: CGFloat = 5,
+        opacity: Double = 0.75,
+        angleDegrees: Double = 0
+    ) -> some View {
+        modifier(
+            BrandGlowModifier(
+                cornerRadius: cornerRadius,
+                lineWidth: lineWidth,
+                glowBlur: glowBlur,
+                opacity: opacity,
+                angleDegrees: angleDegrees
+            )
         )
     }
 }
