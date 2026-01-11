@@ -21,10 +21,13 @@ struct LoginView: View {
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
-    
+
     @State private var isSubmitting: Bool = false
     @State private var errorMessage: String? = nil
     @State private var showErrorAlert: Bool = false
+
+    @State private var logoScale: CGFloat = 0.9
+    @State private var logoOpacity: Double = 0.0
     
     var body: some View {
         GeometryReader { geo in
@@ -45,110 +48,113 @@ struct LoginView: View {
                 accentBlobs(in: geo.size)
                     .ignoresSafeArea()
                 
-                VStack(spacing: 18) {
-                    Spacer()
-                    
-                    // Title block
-                    VStack(spacing: 10) {
-                        Text("Mel")
-                            .font(.system(size: 75, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color(red: 0.39, green: 0.28, blue: 0.60),
-                                        Color(red: 0.76, green: 0.34, blue: 0.60)
-                                    ]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack {
+                        
+                        // Title block
+                        VStack() {
+                            ZStack {
+                                Image("logotrans")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 260, height: 260)
+                                    .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 4)
+                                    .scaleEffect(logoScale)
+                                    .opacity(logoOpacity)
+                                    .offset(y: -4)
+                                    .onAppear {
+                                        withAnimation(.easeOut(duration: 0.6)) {
+                                            logoScale = 1.0
+                                            logoOpacity = 1.0
+                                        }
+                                    }
+
+                                Text("Mel")
+                                    .font(.system(size: 75, weight: .bold, design: .rounded))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color(red: 0.39, green: 0.28, blue: 0.60),
+                                                Color(red: 0.76, green: 0.34, blue: 0.60)
+                                            ]),
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                            }
+                            Text("Your Personal Productivity Companion")
+                                .font(.subheadline)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color(red: 0.39, green: 0.28, blue: 0.60),
+                                            Color(red: 0.76, green: 0.34, blue: 0.60)
+                                        ]),
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
                                 )
-                            )
-                        
-                        Text("An AI-powered productivity app built for how real people live")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 26)
-                    }
-                    .padding(.top, 20)
-                    
-                    // Feature bullets
-                    VStack(alignment: .leading, spacing: 10) {
-                        bulletRow(icon: "square.grid.2x2.fill", text: "All-in-one: tasks, calendar, reminders, notes")
-                        bulletRow(icon: "arrow.2.squarepath", text: "Flexible scheduling that adapts when things run late")
-                        bulletRow(icon: "brain.head.profile", text: "AI learns your timing and suggests better timeframes")
-                        bulletRow(icon: "bell.badge.fill", text: "Smart reminders for real-world moments")
-                    }
-                    .padding(18)
-                    .background(cardBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .padding(.horizontal, 18)
-                    
-                    // Auth (Email/Password for now; Firebase wiring later)
-                    VStack(spacing: 12) {
-                        // Mode toggle
-                        Picker("", selection: $authMode) {
-                            ForEach(EmailAuthMode.allCases) { mode in
-                                Text(mode.rawValue).tag(mode)
-                            }
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 26)
                         }
-                        .pickerStyle(.segmented)
-                        .padding(.horizontal, 6)
-                        .padding(.bottom, 6)
                         
-                        VStack(spacing: 10) {
-                            // Email
-                            HStack(spacing: 10) {
-                                Image(systemName: "envelope.fill")
-                                    .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
-                                    .frame(width: 22)
-                                
-                                TextField("Email", text: $email)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled(true)
-                                    .keyboardType(.emailAddress)
-                                    .textContentType(.none)
+                        // Feature bullets
+                        VStack(alignment: .leading, spacing: 10) {
+                            bulletRow(icon: "square.grid.2x2.fill", text: "All-in-one: tasks, calendar, reminders, notes")
+                            bulletRow(icon: "arrow.2.squarepath", text: "Flexible scheduling that adapts when things run late")
+                            bulletRow(icon: "brain.head.profile", text: "AI learns your timing and suggests better timeframes")
+                            bulletRow(icon: "bell.badge.fill", text: "Smart reminders for real-world moments")
+                        }
+                        .padding(18)
+                        .background(cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .padding(.horizontal, 18)
+                        
+                        // Auth (Email/Password for now; Firebase wiring later)
+                        VStack(spacing: 12) {
+                            // Mode toggle
+                            Picker("", selection: $authMode) {
+                                ForEach(EmailAuthMode.allCases) { mode in
+                                    Text(mode.rawValue).tag(mode)
+                                }
                             }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 14)
-                            .background(cardBackground)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .pickerStyle(.segmented)
+                            .padding(.horizontal, 6)
+                            .padding(.bottom, 6)
                             
-                            // Password
-                            HStack(spacing: 10) {
-                                Image(systemName: "lock.fill")
-                                    .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
-                                    .frame(width: 22)
-                                
-                                SecureField("Password", text: $password)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled(true)
-                                    .textContentType(.none)
-                            }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 14)
-                            .background(cardBackground)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            
-                            // Confirm password (sign up only)
-                            if authMode == .signUp {
+                            VStack(spacing: 10) {
+                                // Email
                                 HStack(spacing: 10) {
-                                    Image(systemName: "lock.rotation")
+                                    Image(systemName: "envelope.fill")
                                         .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
                                         .frame(width: 22)
                                     
-                                    SecureField("Confirm password", text: $confirmPassword)
+                                    TextField("Email", text: $email)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled(true)
+                                        .keyboardType(.emailAddress)
+                                        .textContentType(.none)
+                                }
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 14)
+                                .background(cardBackground)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                
+                                // Password
+                                HStack(spacing: 10) {
+                                    Image(systemName: "lock.fill")
+                                        .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
+                                        .frame(width: 22)
+                                    
+                                    SecureField("Password", text: $password)
                                         .textInputAutocapitalization(.never)
                                         .autocorrectionDisabled(true)
                                         .textContentType(.none)
@@ -161,96 +167,122 @@ struct LoginView: View {
                                         .stroke(Color.white.opacity(0.45), lineWidth: 1)
                                 )
                                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            }
-                            
-                            // Inline error
-                            if let errorMessage {
-                                Text(errorMessage)
-                                    .font(.footnote)
-                                    .foregroundColor(.red)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.top, 2)
-                            }
-                            
-                            // Submit
-                            Button {
-                                submitEmailAuth()
-                            } label: {
-                                HStack(spacing: 10) {
-                                    if isSubmitting {
-                                        ProgressView()
-                                            .tint(.white)
-                                    } else {
-                                        Image(systemName: authMode == .signUp ? "person.badge.plus" : "person.fill.checkmark")
-                                            .font(.system(size: 16, weight: .semibold))
+                                
+                                // Confirm password (sign up only)
+                                if authMode == .signUp {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "lock.rotation")
+                                            .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
+                                            .frame(width: 22)
+                                        
+                                        SecureField("Confirm password", text: $confirmPassword)
+                                            .textInputAutocapitalization(.never)
+                                            .autocorrectionDisabled(true)
+                                            .textContentType(.none)
+                                    }
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 14)
+                                    .background(cardBackground)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                }
+                                
+                                // Inline error
+                                if let errorMessage {
+                                    Text(errorMessage)
+                                        .font(.footnote)
+                                        .foregroundColor(.red)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.top, 2)
+                                }
+                                
+                                // Submit
+                                Button {
+                                    submitEmailAuth()
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        if isSubmitting {
+                                            ProgressView()
+                                                .tint(.white)
+                                        } else {
+                                            Image(systemName: authMode == .signUp ? "person.badge.plus" : "person.fill.checkmark")
+                                                .font(.system(size: 16, weight: .semibold))
+                                        }
+                                        
+                                        Text(authMode == .signUp ? "Create account" : "Sign in")
+                                            .font(.headline)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                }
+                                .buttonStyle(PrimaryPillButtonStyle())
+                                .disabled(!canSubmit || isSubmitting)
+                                .opacity((!canSubmit || isSubmitting) ? 0.7 : 1.0)
+                                
+                                // Secondary actions
+                                HStack {
+                                    Button {
+                                        // Placeholder: wire password reset later
+                                        errorMessage = "Password reset will be added soon."
+                                    } label: {
+                                        Text("Forgot password?")
+                                            .font(.footnote)
+                                            .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
                                     }
                                     
-                                    Text(authMode == .signUp ? "Create account" : "Sign in")
-                                        .font(.headline)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                            }
-                            .buttonStyle(PrimaryPillButtonStyle())
-                            .disabled(!canSubmit || isSubmitting)
-                            .opacity((!canSubmit || isSubmitting) ? 0.7 : 1.0)
-                            
-                            // Secondary actions
-                            HStack {
-                                Button {
-                                    // Placeholder: wire password reset later
-                                    errorMessage = "Password reset will be added soon."
-                                } label: {
-                                    Text("Forgot password?")
+                                    Spacer()
+                                    
+                                    Button {
+                                        // Placeholder: wire Sign in with Apple later
+                                        errorMessage = "Apple sign-in will be added soon."
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "applelogo")
+                                            Text("Apple")
+                                        }
                                         .font(.footnote)
                                         .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
-                                }
-                                
-                                Spacer()
-                                
-                                Button {
-                                    // Placeholder: wire Sign in with Apple later
-                                    errorMessage = "Apple sign-in will be added soon."
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "applelogo")
-                                        Text("Apple")
                                     }
-                                    .font(.footnote)
-                                    .foregroundColor(Color(red: 0.39, green: 0.28, blue: 0.60))
                                 }
+                                .padding(.top, 2)
                             }
-                            .padding(.top, 2)
-                        }
-                        .padding(18)
-                        .background(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.white.opacity(0.58),
-                                    Color.white.opacity(0.42)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                            .padding(18)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.white.opacity(0.58),
+                                        Color.white.opacity(0.42)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .stroke(Color.white.opacity(0.45), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                            
+                            Text("By continuing, you agree to our Terms and Privacy Policy")
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 18)
+                                .padding(.top, 6)
+                        }
+                        .padding(.horizontal, 18)
                         
-                        Text("By continuing, you agree to our Terms and Privacy Policy")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 18)
-                            .padding(.top, 6)
+                        Spacer(minLength: 26)
                     }
-                    .padding(.horizontal, 18)
-                    
-                    Spacer(minLength: 26)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 18)
+                    .padding(.bottom, 24)
                 }
                 .frame(width: geo.size.width)
+                .scrollDismissesKeyboard(.interactively)
                 .alert("Sign in failed", isPresented: $showErrorAlert) {
                     Button("OK", role: .cancel) { }
                 } message: {
