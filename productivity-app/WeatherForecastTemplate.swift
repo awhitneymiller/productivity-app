@@ -43,11 +43,13 @@ struct HomePage: View {
             }
             .buttonStyle(.plain)
 
-        case "Time\u{00A0}Block":
+        case "Time Block":
             NavigationLink {
                 TimeBlockingView()
             } label: {
                 QuickLinkButton(link: link)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
             }
             .buttonStyle(.plain)
 

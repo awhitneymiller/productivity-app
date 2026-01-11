@@ -205,9 +205,12 @@ struct CalendarView: View {
     @State private var showTimeBlocking: Bool = false
     
     init() {
-        let now = Date()
-        let start = Calendar.current.date(byAdding: .month, value: -6, to: now) ?? now
-        let end = Calendar.current.date(byAdding: .month, value: 18, to: now) ?? now
+        // Anchor the initial view around January 2026 (so the calendar opens there by default).
+        let cal = Calendar.current
+        let anchor = cal.date(from: DateComponents(year: 2026, month: 1, day: 15)) ?? Date()
+
+        let start = cal.date(byAdding: .month, value: -6, to: anchor) ?? anchor
+        let end = cal.date(byAdding: .month, value: 18, to: anchor) ?? anchor
         self.visibleDateRange = start...end
     }
     
